@@ -10,4 +10,4 @@ database_id = "dd8ebe3a-2c52-4a61-a099-9989c041a629"
 [vars]
 # The pages allowed to call the API. The game's real address, no trailing slash; several are fine, comma-separated.
 # Blank means any page.
-ALLOW_ORIGIN = ""
+ALLOW_ORIGIN = "https://okayline.github.io"
