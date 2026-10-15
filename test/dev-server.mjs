@@ -8,7 +8,7 @@ const root = new URL("..", import.meta.url).pathname, port = +(process.argv[2] |
 const sql = new DatabaseSync(":memory:");
 sql.exec(readFileSync(root + "worker/schema.sql", "utf8"));
 const stmt = (q, args = []) => ({ bind: (...a) => stmt(q, a), first: async () => sql.prepare(q).get(...args) ?? null,
-  all: async () => ({ results: sql.prepare(q).all(...args) }), run: async () => sql.prepare(q).run(...args) });
+  all: async () => ({ results: sql.prepare(q).all(...args) }), run: async () => { const r = sql.prepare(q).run(...args); return { meta: { changes: Number(r.changes) } }; } });
 const env = { DB: { prepare: q => stmt(q), batch: async l => { sql.exec("BEGIN"); try { for (const s of l) await s.run(); sql.exec("COMMIT"); } catch (e) { sql.exec("ROLLBACK"); throw e; } } }, ALLOW_ORIGIN: "" };
 const TYPES = { html: "text/html", js: "text/javascript", ttf: "font/ttf" };
 http.createServer(async (req, res) => {

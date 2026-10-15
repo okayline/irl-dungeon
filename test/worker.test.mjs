@@ -11,7 +11,7 @@ const stmt = (q, args = []) => ({
   bind: (...a) => stmt(q, a),
   first: async () => sql.prepare(q).get(...args) ?? null,
   all: async () => ({ results: sql.prepare(q).all(...args) }),
-  run: async () => sql.prepare(q).run(...args),
+  run: async () => { const r = sql.prepare(q).run(...args); return { meta: { changes: Number(r.changes) } }; },
 });
 const DB = { prepare: q => stmt(q), batch: async list => { sql.exec("BEGIN"); try { for (const s of list) await s.run(); sql.exec("COMMIT"); } catch (e) { sql.exec("ROLLBACK"); throw e; } } };
 const env = { DB, ALLOW_ORIGIN: "" };
@@ -38,27 +38,29 @@ function walkAll(w) {
 
 let fails = 0;
 const check = (name, ok) => { console.log((ok ? "ok   " : "FAIL ") + name); if (!ok) fails++; };
-const KEY = "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567", KEY2 = "BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH-2222";
 const cell = "8a2ab8264d07fff", day = Math.floor(Date.now() / 86400000);
 const w = WING.generate(cell, day, ""), moves = walkAll(w);
 const id = () => createHash("md5").update(String(Math.random())).digest("hex");
-const proof = () => createHash("sha256").update(String(Math.random())).digest("hex");
 
 check("unclaimed wing reads as not committed", (await call("GET", `/wing?cell=${cell}`)).body.committed === false);
-check("commit without a save code is refused", (await call("POST", "/commit", { cell, day, moves, entry_id: id(), proof: proof() })).status === 401);
-check("commit with a missed tile is refused", (await call("POST", "/commit", { cell, day, moves: "F", entry_id: id(), proof: proof() }, KEY)).status === 400);
-check("commit on a far-off day is refused", (await call("POST", "/commit", { cell, day: day - 5, moves, entry_id: id(), proof: proof() }, KEY)).status === 400);
-const c = await call("POST", "/commit", { cell, day, moves, entry_id: id(), proof: proof() }, KEY);
-check("a full clear commits", c.status === 200 && c.body.ok);
-check("second finder gets 409", (await call("POST", "/commit", { cell, day, moves, entry_id: id(), proof: proof() }, KEY2)).status === 409);
+check("commit with a missed tile is refused", (await call("POST", "/commit", { cell, day, moves: "F", entry_id: id() })).status === 400);
+check("commit on a far-off day is refused", (await call("POST", "/commit", { cell, day: day - 5, moves, entry_id: id() })).status === 400);
+const c = await call("POST", "/commit", { cell, day, moves, entry_id: id() });
+check("a first find commits and makes a player (with a device token)", c.status === 200 && c.body.ok && c.body.token);
+const KEY = c.body.token;
+const other = await call("POST", "/codes", { action: "new" });   // a second player, made by asking for a save code
+const KEY2 = other.body.token;
+check("a save code can be made without any find", /^[0-9A-Z]{4}(-[0-9A-Z]{4}){4}$/.test(other.body.code || "") && KEY2);
+check("second finder gets 409", (await call("POST", "/commit", { cell, day, moves, entry_id: id() }, KEY2)).status === 409);
 const g = await call("GET", `/wing?cell=${cell}`);
 check("committed wing returns the frozen snapshot", g.body.committed && JSON.stringify(g.body.wing.walls) === JSON.stringify(w.walls));
 const cell2 = "8a2ab8264d0ffff", w2 = WING.generate(cell2, day, "");
-await call("POST", "/commit", { cell: cell2, day, moves: walkAll(w2), entry_id: id(), proof: proof() }, KEY);
+const c2 = await call("POST", "/commit", { cell: cell2, day, moves: walkAll(w2), entry_id: id() }, KEY);
+check("a second find by the same player makes no new player", c2.body.ok && !c2.body.token);
 const led = (await call("GET", "/ledger")).body.rows;
 check("public ledger has both entries", led.length === 2);
 check("every find goes in anonymous, with no time", led.every(r => !r.signed && !("minute" in r)));
-check("two finds by one player have different names", led[0].name !== led[1].name);
+check("two finds by one player have different names and proofs", led[0].name !== led[1].name && led[0].proof !== led[1].proof);
 check("public ledger has no player id", !JSON.stringify(led).includes("player"));
 const at0 = (await call("GET", "/atlas", null, KEY)).body;
 check("someone else can't sign your find", (await call("POST", "/sign", { entry_id: at0.rows[0].entry_id }, KEY2)).status === 403);
@@ -71,4 +73,16 @@ check("atlas lists the player's two finds under one name", at.rows.length === 2 
 check("another player's atlas is empty", (await call("GET", "/atlas", null, KEY2)).body.rows.length === 0);
 const cs = (await call("GET", `/cells?ids=${cell},${cell2},8a2ab8264d17fff`)).body.found;
 check("cells lookup returns only the found ones", cs.length === 2 && cs.includes(cell) && cs.includes(cell2));
+
+// Save codes: a separate way in, the same as scoundrel.exe.
+check("logging out with no save code or passkey is refused", (await call("POST", "/logout", {}, KEY)).status === 400);
+const code = (await call("POST", "/codes", { action: "new" }, KEY)).body.code;
+const acc = (await call("GET", "/account", null, KEY)).body;
+check("the account lists the code but never shows it", acc.codes.length === 1 && !JSON.stringify(acc).includes(code));
+check("a wrong save code doesn't load anything", (await call("POST", "/load", { code: "AAAA-BBBB-CCCC-DDDD-EEEE" })).status === 404);
+const loaded = (await call("POST", "/load", { code: code.toLowerCase().replace(/-/g, " ") })).body;
+check("a save code loads the same player on another device", loaded.token && (await call("GET", "/atlas", null, loaded.token)).body.rows.length === 2);
+check("logging out works once there's a way back in", (await call("POST", "/logout", {}, loaded.token)).body.ok);
+check("a logged-out device is nobody", (await call("GET", "/account", null, loaded.token)).body.player === false);
+check("the first device still works", (await call("GET", "/account", null, KEY)).body.player === true);
 process.exit(fails ? 1 : 0);

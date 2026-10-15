@@ -1,14 +1,24 @@
 // irl-dungeon API: a Cloudflare Worker with a D1 database (binding DB). No dependencies.
+// Requests that act as a player send Authorization: Bearer <device token>. A player is made on their first find,
+// first save code or first passkey, and the reply then carries {token} for the page to keep.
 //   GET  /wing?cell=&path=      -> {committed:false} | {committed:true, wing, date, moon, name}
-//   POST /commit                -> {ok, entry} | 409 {error, wing}      (header: Authorization: Bearer <save code>)
-//          body {cell, path, day, moves, entry_id, proof}       every find goes in anonymous
+//   POST /commit                -> {ok, entry, token?} | 409 {error, wing}
+//          body {cell, path, day, moves, entry_id}       every find goes in anonymous
 //   POST /sign   {entry_id}     -> {ok}   sign one of your own finds later: appended to signatures, never an edit
+//   GET  /account               -> {player, name, codes, passkeys}   (never the codes themselves)
+//   POST /codes  {action: "new" | "remove", id}   -> {code, token?}   a save code, shown once
+//   POST /load   {code}         -> {token, name}   log this device in with a save code
+//   POST /logout                -> {ok}   this device forgets its player (needs a save code or passkey first)
+//   POST /passkey {action ...}  register_options / register / login_options / login / remove
 //   GET  /cells?ids=a,b,c       -> {found: [cell, ...]}   which of up to 37 cells have a found first wing
 //   GET  /ledger?cell=          -> {rows: [...]}   public ledger, a cell's entries or the latest 50
 //   GET  /atlas                 -> {name, rows: [...]}   the player's own entries  (Authorization: Bearer <save code>)
-// The server never sees coordinates: only cell IDs. It never stores the save code: only its hash.
+// The server never sees coordinates: only cell IDs. It stores only hashes of save codes and device tokens.
+// Save codes and passkeys work the same way as in scoundrel.exe and the 88x31 cLuB (saves.js, passkeys.js).
 // The public side shows dates only, never times: the exact time stays in the private ledger.
 import WING from "../wing.js";
+import { now as nowS, MAX_CODES, newSaveCode, hashCode, newToken, newSession, rateLimit } from "./saves.js";
+import { registerOptions, verifyRegistration, loginOptions, verifyLogin } from "./passkeys.js";
 
 const MOON_REF = Date.UTC(2000, 0, 6, 18, 14), SYN = 29.530588853;
 const moonIndex = ms => { let a = ((ms - MOON_REF) / 86400000) % SYN; if (a < 0) a += SYN; return Math.floor(a / SYN * 8 + 0.5) % 8; };
@@ -24,7 +34,9 @@ async function sha256(s) {
   return [...b].map(x => x.toString(16).padStart(2, "0")).join("");
 }
 
-const CELL_RE = /^[0-9a-f]{15}$/, HEX64 = /^[0-9a-f]{64}$/, ID_RE = /^[0-9a-f]{32}$/, KEY_RE = /^[A-Z2-7]{4}(-[A-Z2-7]{4}){7}$/;
+const CELL_RE = /^[0-9a-f]{15}$/, ID_RE = /^[0-9a-f]{32}$/;
+const hex = n => [...crypto.getRandomValues(new Uint8Array(n))].map(x => x.toString(16).padStart(2, "0")).join("");
+class Oops extends Error { constructor(msg, status = 400) { super(msg); this.status = status; } }
 
 function cors(env, req) {
   const allow = (env.ALLOW_ORIGIN || "").split(",").map(s => s.trim()).filter(Boolean);
@@ -34,11 +46,27 @@ function cors(env, req) {
 }
 const json = (h, body, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...h, "Content-Type": "application/json" } });
 
-async function playerFrom(req, db) {
-  const key = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/, "").trim().toUpperCase();
-  if (!KEY_RE.test(key)) return null;
-  const id = await sha256("player:" + key);
-  return { id, name: nameFrom(await sha256("name:" + id)) };
+// The player behind this request's device token, or null. Never makes one.
+async function findPlayer(req, db) {
+  const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/, "").trim();
+  if (!/^[A-Za-z0-9_-]{20,}$/.test(token)) return null;
+  const th = await sha256(token);
+  let p = await db.prepare("SELECT id, name, proof_secret FROM players WHERE token_hash = ?1").bind(th).first();
+  if (!p) {
+    p = await db.prepare("SELECT p.id, p.name, p.proof_secret FROM sessions s JOIN players p ON p.id = s.player_id WHERE s.token_hash = ?1").bind(th).first();
+    if (p) await db.prepare("UPDATE sessions SET seen_at = ?1 WHERE token_hash = ?2").bind(nowS(), th).run();
+  }
+  return p ? { ...p, token_hash: th } : null;
+}
+// The player behind this request, made on the spot if there isn't one. Returns { player, token? }.
+async function needPlayer(req, db) {
+  const found = await findPlayer(req, db);
+  if (found) return { player: found };
+  const id = hex(16), token = newToken();
+  const player = { id, name: nameFrom(await sha256("name:" + id)), proof_secret: hex(32) };
+  await db.prepare("INSERT INTO players (id, token_hash, name, proof_secret, created) VALUES (?1, ?2, ?3, ?4, ?5)")
+    .bind(id, await sha256(token), player.name, player.proof_secret, Date.now()).run();
+  return { player, token };
 }
 
 // Replay the moves on the regenerated wing: every step must go through an open side, and every tile must be
@@ -78,11 +106,9 @@ export default {
       }
 
       if (req.method === "POST" && path === "/commit") {
-        const p = await playerFrom(req, db);
-        if (!p) return json(h, { error: "no save code" }, 401);
         const b = await req.json().catch(() => ({}));
-        const { cell, day, moves, entry_id, proof } = b, wp = b.path || "", signed = false;   // (v0.06) always anonymous; sign later
-        if (!CELL_RE.test(cell || "") || wp !== "" || !ID_RE.test(entry_id || "") || !HEX64.test(proof || "")) return json(h, { error: "bad request" }, 400);
+        const { cell, day, moves, entry_id } = b, wp = b.path || "", signed = false;   // (v0.06) always anonymous; sign later
+        if (!CELL_RE.test(cell || "") || wp !== "" || !ID_RE.test(entry_id || "")) return json(h, { error: "bad request" }, 400);
         // The day must be today somewhere on Earth: within a day of UTC's.
         const now = Date.now(), utcDay = Math.floor(now / 86400000);
         if (!Number.isInteger(day) || Math.abs(day - utcDay) > 1) return json(h, { error: "wrong day" }, 400);
@@ -91,7 +117,9 @@ export default {
         const w = WING.generate(cell, day, wp);
         if (!replay(w, moves)) return json(h, { error: "not cleared" }, 400);
 
-        await db.prepare("INSERT INTO players (id, name, created) VALUES (?1, ?2, ?3) ON CONFLICT (id) DO NOTHING").bind(p.id, p.name, now).run();
+        const { player: p, token } = await needPlayer(req, db);
+        // The proof: lets the player show "that was me" later, from their own secret. No two proofs can be linked.
+        const proof = await sha256(p.proof_secret + entry_id);
         const seqRow = await db.prepare("SELECT COALESCE(MAX(seq), 0) + 1 AS n FROM private_ledger").first();
         const seq = seqRow.n, moon = moonIndex(now), iso = new Date(now).toISOString();
         const priv = { entry_id, seq, player_id: p.id, cell, path: wp, day, at_ms: now, signed: signed ? 1 : 0 };
@@ -105,12 +133,12 @@ export default {
           db.prepare("INSERT INTO public_ledger (entry_id, seq, cell, path, date, minute, moon, anon, signed_name, proof, commit_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)")
             .bind(entry_id, seq, cell, wp, iso.slice(0, 10), null, moon, anon, null, proof, commit_hash),   // no minute: dates only
         ]);
-        return json(h, { ok: true, entry: { entry_id, cell, path: wp, date: iso.slice(0, 10), moon, name: anon, signed } });
+        return json(h, { ok: true, token, entry: { entry_id, cell, path: wp, date: iso.slice(0, 10), moon, name: anon, signed } });
       }
 
       if (req.method === "POST" && path === "/sign") {
-        const p = await playerFrom(req, db);
-        if (!p) return json(h, { error: "no save code" }, 401);
+        const p = await findPlayer(req, db);
+        if (!p) return json(h, { error: "no player here" }, 401);
         const b = await req.json().catch(() => ({}));
         if (!ID_RE.test(b.entry_id || "")) return json(h, { error: "bad request" }, 400);
         const mine = await db.prepare("SELECT entry_id FROM private_ledger WHERE entry_id = ?1 AND player_id = ?2").bind(b.entry_id, p.id).first();
@@ -137,14 +165,92 @@ export default {
       }
 
       if (req.method === "GET" && path === "/atlas") {
-        const p = await playerFrom(req, db);
-        if (!p) return json(h, { error: "no save code" }, 401);
+        const p = await findPlayer(req, db);
+        if (!p) return json(h, { name: null, rows: [] });
         const rows = (await db.prepare("SELECT p.*, s.signed_name AS sname FROM private_ledger v JOIN public_ledger p ON p.entry_id = v.entry_id LEFT JOIN signatures s ON s.entry_id = p.entry_id WHERE v.player_id = ?1 ORDER BY v.seq DESC LIMIT 200").bind(p.id).all()).results;
         return json(h, { name: p.name, rows: rows.map(r => ({ ...publicRow(r), entry_id: r.entry_id, name: p.name })) });
       }
 
+      // ---------- save codes and passkeys (as in scoundrel.exe) ----------
+      if (req.method === "GET" && path === "/account") {
+        const p = await findPlayer(req, db);
+        if (!p) return json(h, { player: false, name: null, codes: [], passkeys: [] });
+        const codes = (await db.prepare("SELECT id, created_at, last_used_at FROM save_codes WHERE player_id = ?1 ORDER BY id").bind(p.id).all()).results;
+        const keys = (await db.prepare("SELECT id, label, created_at, last_used_at FROM passkeys WHERE player_id = ?1 ORDER BY id").bind(p.id).all()).results;
+        return json(h, { player: true, name: p.name, codes, passkeys: keys });
+      }
+      if (req.method === "POST" && path === "/codes") {
+        const b = await req.json().catch(() => ({}));
+        if (b.action === "new") {
+          const { player: p, token } = await needPlayer(req, db);
+          const n = (await db.prepare("SELECT COUNT(*) AS n FROM save_codes WHERE player_id = ?1").bind(p.id).first()).n;
+          if (n >= MAX_CODES) throw new Oops(`You have ${MAX_CODES} save codes already. Forget one first.`);
+          const code = newSaveCode();
+          await db.prepare("INSERT INTO save_codes (player_id, code_hash, created_at) VALUES (?1, ?2, ?3)").bind(p.id, await hashCode(code), nowS()).run();
+          return json(h, { code, token });
+        }
+        if (b.action === "remove") {
+          const p = await findPlayer(req, db);
+          if (!p) throw new Oops("No player here.", 401);
+          const r = await db.prepare("DELETE FROM save_codes WHERE id = ?1 AND player_id = ?2").bind(Number(b.id), p.id).run();
+          if (!r.meta.changes) throw new Oops("No such save code.", 404);
+          return json(h, { ok: true });
+        }
+        throw new Oops("Unknown action.");
+      }
+      if (req.method === "POST" && path === "/load") {
+        if (!(await rateLimit(env, req, "load", 10, 900))) throw new Oops("Too many tries. Wait 15 minutes and try again.", 429);
+        const code = (await req.json().catch(() => ({}))).code;
+        const row = await db.prepare("SELECT c.id, p.id AS player_id, p.name FROM save_codes c JOIN players p ON p.id = c.player_id WHERE c.code_hash = ?1")
+          .bind(await hashCode(code)).first();
+        if (!row) throw new Oops("That save code didn't work. Check it and try again.", 404);
+        await db.prepare("UPDATE save_codes SET last_used_at = ?1 WHERE id = ?2").bind(nowS(), row.id).run();
+        return json(h, { token: await newSession(env, row.player_id), name: row.name });
+      }
+      if (req.method === "POST" && path === "/logout") {
+        const p = await findPlayer(req, db);
+        if (!p) return json(h, { ok: true });
+        const ways = (await db.prepare("SELECT (SELECT COUNT(*) FROM save_codes WHERE player_id = ?1) + (SELECT COUNT(*) FROM passkeys WHERE player_id = ?1) AS n").bind(p.id).first()).n;
+        if (!ways) throw new Oops("Make a save code or passkey first, or you'd have no way back in.");
+        const s = await db.prepare("DELETE FROM sessions WHERE token_hash = ?1").bind(p.token_hash).run();
+        if (!s.meta.changes) await db.prepare("UPDATE players SET token_hash = ?1 WHERE id = ?2 AND token_hash = ?3").bind(await sha256(newToken()), p.id, p.token_hash).run();
+        return json(h, { ok: true });
+      }
+      if (req.method === "POST" && path === "/passkey") {
+        const b = await req.json().catch(() => ({}));
+        try {
+          if (b.action === "login_options" || b.action === "login") {
+            if (!(await rateLimit(env, req, "passkey", 20, 900))) throw new Oops("Too many tries. Wait 15 minutes and try again.", 429);
+            if (b.action === "login_options") return json(h, await loginOptions(env, req));
+            const playerId = await verifyLogin(env, req, b.credential);
+            const p = await db.prepare("SELECT id, name FROM players WHERE id = ?1").bind(playerId).first();
+            if (!p) throw new Oops("That player is gone.", 404);
+            return json(h, { token: await newSession(env, p.id), name: p.name });
+          }
+          if (b.action === "register_options" || b.action === "register") {
+            const { player: p, token } = await needPlayer(req, db);
+            if (b.action === "register_options") return json(h, { ...(await registerOptions(env, req, p)), token });
+            const n = (await db.prepare("SELECT COUNT(*) AS n FROM passkeys WHERE player_id = ?1").bind(p.id).first()).n;
+            if (n >= 10) throw new Oops("That's plenty of passkeys! Forget one first.");
+            return json(h, await verifyRegistration(env, req, p, b.credential, b.label));
+          }
+          if (b.action === "remove") {
+            const p = await findPlayer(req, db);
+            if (!p) throw new Oops("No player here.", 401);
+            const r = await db.prepare("DELETE FROM passkeys WHERE id = ?1 AND player_id = ?2").bind(Number(b.id), p.id).run();
+            if (!r.meta.changes) throw new Oops("No such passkey.", 404);
+            return json(h, { ok: true });
+          }
+          throw new Oops("Unknown action.");
+        } catch (e) {
+          if (e instanceof Oops) throw e;
+          throw new Oops(e.message || "Something went wrong with the passkey.");
+        }
+      }
+
       return json(h, { error: "not found" }, 404);
     } catch (e) {
+      if (e instanceof Oops) return json(h, { error: e.message }, e.status);
       return json(h, { error: "server error" }, 500);
     }
   },

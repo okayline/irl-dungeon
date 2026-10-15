@@ -9,28 +9,25 @@
   const tz = SMT.zone();
   const MOONS = ["new moon", "waxing crescent", "first quarter", "waxing gibbous", "full moon", "waning gibbous", "last quarter", "waning crescent"];
   const MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-  let game = null, msg = "", popup = null;          // popup: null, "key" (the SAVE menu), "keyentry", "atlas", "ledger", "map"
-  let atlas = null, ledger = null, area = null, keyDraft = "";
+  let game = null, msg = "", popup = null;          // popup: null, "key" (the SAVE menu), "newcode", "keyentry", "atlas", "ledger", "map"
+  let atlas = null, ledger = null, area = null, acct = null, keyDraft = "", newCode = "", busy = false;
 
-  // THE SAVE CODE: the player's whole identity. Made here, kept in this browser; the server only ever sees its hash.
-  const store = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
-  const KEY_RE = /^[A-Z2-7]{4}(-[A-Z2-7]{4}){7}$/;
-  function makeKey() {
-    const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", b = crypto.getRandomValues(new Uint8Array(32));
-    return [...b].map(x => A[x & 31]).join("").match(/.{4}/g).join("-");
-  }
-  const getKey = () => { const k = store.get("irl.key"); return k && KEY_RE.test(k) ? k : null; };
-  async function sha256(s) {
-    const b = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
-    return [...b].map(x => x.toString(16).padStart(2, "0")).join("");
-  }
+  // THE PLAYER: this device's token (sent as Authorization: Bearer). The server makes a player on the first find,
+  // save code or passkey and hands back a token; a save code or a passkey logs another device into the same
+  // player. Save codes and passkeys are two separate ways in, the same as scoundrel.exe and the 88x31 cLuB.
+  const store = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
+    del: k => { try { localStorage.removeItem(k); } catch (e) {} } };
+  const getToken = () => store.get("irl.token");
+  const keepToken = t => { if (t) store.set("irl.token", t); };
   const randId = () => [...crypto.getRandomValues(new Uint8Array(16))].map(x => x.toString(16).padStart(2, "0")).join("");
 
   async function api(method, path, body) {
-    const key = getKey(), headers = { "Content-Type": "application/json" };
-    if (key) headers.Authorization = "Bearer " + key;
+    const token = getToken(), headers = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = "Bearer " + token;
     const r = await fetch(API + path, { method, headers, body: body && JSON.stringify(body) });
-    return { status: r.status, body: await r.json().catch(() => ({})) };
+    const b = await r.json().catch(() => ({}));
+    if (b && b.token && !token) keepToken(b.token);   // a player was just made for this device
+    return { status: r.status, body: b };
   }
 
   // The cell where the player stands. Only the cell ID is kept; the coordinates are dropped right here.
@@ -90,12 +87,15 @@
   function box(rows, w) { return ["+" + "-".repeat(w) + "+", ...rows.map(r => "|" + pad(r, w) + "|"), "+" + "-".repeat(w) + "+"]; }
   function popupBox() {
     // THE SAVE MENU. The code is always the SAVE CODE; KEY or PASSKEY only ever means the passkey.
-    if (popup === "key" && getKey()) return box(["", "   YOUR SAVE CODE.", "", "   " + getKey().slice(0, 19), "   " + getKey().slice(20), "",
-      "   It's the only way back to your atlas.", "", "   [P] PASSKEY       [D] DOWNLOAD .TXT", "   [N] ANOTHER CODE  [ESC] BACK"], 41);
-    if (popup === "key") return box(["", "   NO SAVE CODE YET.", "", "   One is made on your first find, or:", "",
-      "   [C] MAKE A SAVE CODE", "   [R] RESTORE A SAVE CODE", "   [P] PASSKEY", "   [ESC] BACK"], 41);
-    if (popup === "keyentry") return box(["", "   TYPE YOUR SAVE CODE.", "", "   " + keyDraft.slice(0, 19), "   " + keyDraft.slice(20), "",
-      "", "   [ENTER] USE IT         [ESC] BACK"], 41);
+    if (popup === "key") {
+      const head = !acct ? "   Reading..." : `   SAVE CODES  ${acct.codes.length}      PASSKEYS  ${acct.passkeys.length}`;
+      return box(["", head, "", "   [1] NEW SAVE CODE", "   [2] ADD A PASSKEY", "   [3] LOG IN WITH A SAVE CODE",
+        "   [4] LOG IN WITH A PASSKEY", "", "   [O] LOG OUT           [ESC] BACK"], 41);
+    }
+    if (popup === "newcode") return box(["", "   YOUR NEW SAVE CODE:", "", "   " + newCode, "",
+      "   Shown once. Keep it somewhere safe.", "", "   [D] DOWNLOAD .TXT     [ESC] DONE"], 41);
+    if (popup === "keyentry") return box(["", "   TYPE YOUR SAVE CODE.", "", "   " + keyDraft, "",
+      "   Dashes and spaces don't matter.", "", "   [ENTER] LOG IN        [ESC] BACK"], 41);
     if (popup === "atlas") {
       const rows = !atlas ? ["", "  Reading the atlas..."] : atlas.error ? ["", "  " + atlas.error] : !atlas.rows.length ? ["", "  Nothing found yet."]
         : ["  DATE          MOON             CELL   WING  SIGNED", ...atlas.rows.slice(0, 11).map((r, n) =>
@@ -141,14 +141,12 @@
 
   async function commit() {
     if (!API) { msg = "Offline: nothing was sent."; return draw(); }
-    if (!getKey()) store.set("irl.key", makeKey());
-    const entry_id = randId(), proof = await sha256((await sha256("proof:" + getKey())) + entry_id);
+    const entry_id = randId();
     msg = "Sending..."; draw();
     try {
-      const r = await api("POST", "/commit", { cell: game.cell, day: game.day, moves: game.moves, entry_id, proof });
+      const r = await api("POST", "/commit", { cell: game.cell, day: game.day, moves: game.moves, entry_id });
       if (r.status === 200) {
         game.mine = true;
-        // (No popup: a first save code is made quietly, and [S]AVE shows it whenever the player wants.)
         msg = `Found, ${stamp(r.body.entry.date, r.body.entry.moon)}. It's in your atlas.`;
       } else if (r.status === 409) {
         game.found = true; msg = "Someone walked it first, moments ago.";
@@ -185,42 +183,96 @@
     if (popup === "ledger") draw();
   }
 
-  // PASSKEYS: the save code itself rides inside the passkey (as its user handle), so Face ID or a fingerprint
-  // brings it back on any device the passkey syncs to. Nothing about it goes to the server.
-  const PK_OK = !!(window.PublicKeyCredential && navigator.credentials);
-  async function makePasskey() {
-    if (!PK_OK) { msg = "This browser can't make passkeys."; return draw(); }
-    const key = getKey();
-    try {
-      await navigator.credentials.create({ publicKey: {
-        rp: { name: "irl-dungeon" }, challenge: crypto.getRandomValues(new Uint8Array(32)),
-        user: { id: new TextEncoder().encode(key), name: "irl-dungeon " + key.slice(0, 4), displayName: "irl-dungeon save code" },
-        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-        authenticatorSelection: { residentKey: "required", userVerification: "preferred" } } });
-      popup = null; msg = "Passkey made. It can bring your save code back on any device it syncs to.";
-    } catch (e) { msg = "No passkey was made."; }
-    draw();
+  // ---------- save codes and passkeys (ported from scoundrel.exe's client) ----------
+  async function openSave() {
+    popup = "key"; acct = null; draw();
+    if (!API) { msg = "Offline: save codes and passkeys need the server."; popup = null; return draw(); }
+    try { acct = (await api("GET", "/account")).body; } catch (e) { msg = "The server didn't answer."; }
+    if (popup === "key") draw();
   }
-  async function usePasskey() {
-    if (!PK_OK) { msg = "This browser can't use passkeys."; return draw(); }
+  async function makeCode() {
+    if (busy) return; busy = true;
     try {
-      const c = await navigator.credentials.get({ publicKey: { challenge: crypto.getRandomValues(new Uint8Array(32)), userVerification: "preferred" } });
-      const key = new TextDecoder().decode(c.response.userHandle || new ArrayBuffer(0));
-      if (!KEY_RE.test(key)) { msg = "That passkey doesn't hold a save code."; return draw(); }
-      store.set("irl.key", key); popup = null; msg = "Save code restored from your passkey.";
-    } catch (e) { msg = "The passkey wasn't used."; }
+      const r = await api("POST", "/codes", { action: "new" });
+      if (r.body.code) { newCode = r.body.code; popup = "newcode"; msg = "Save code made."; } else msg = r.body.error || "No save code was made.";
+    } catch (e) { msg = "The server didn't answer."; }
+    busy = false; draw();
+  }
+  async function loadWithCode() {
+    if (busy) return; busy = true;
+    try {
+      const r = await fetch(API + "/load", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: keyDraft }) });
+      const b = await r.json().catch(() => ({}));
+      if (b.token) { store.set("irl.token", b.token); popup = null; msg = "Logged in. Your atlas is here now."; }
+      else msg = b.error || "That save code didn't work.";
+    } catch (e) { msg = "The server didn't answer."; }
+    busy = false; draw();
+  }
+  async function logOut() {
+    try {
+      const r = await api("POST", "/logout", {});
+      if (r.body.ok) { store.del("irl.token"); popup = null; msg = "Logged out. Log back in any time with a save code or passkey."; }
+      else msg = r.body.error || "Couldn't log out.";
+    } catch (e) { msg = "The server didn't answer."; }
     draw();
   }
 
-  // The save code as a .txt file, for keeping somewhere safe.
-  function downloadKey() {
-    const text = "irl-dungeon save code\n\n" + getKey() + "\n\nThis code is the only way back to your atlas. Keep it private.\n" + location.origin + location.pathname + "\n";
+  // The browser speaks WebAuthn in ArrayBuffers; the server speaks base64url. (From the 88x31 cLuB.)
+  const pkSupported = () => !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+  const fromB64 = s => { const t = s.replace(/-/g, "+").replace(/_/g, "/"); return Uint8Array.from(atob(t + "===".slice((t.length + 3) % 4)), c => c.charCodeAt(0)).buffer; };
+  const toB64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const deviceName = () => {
+    const u = navigator.userAgent;
+    return /iPhone/.test(u) ? "iPhone" : /iPad/.test(u) ? "iPad" : /Android/.test(u) ? "Android" : /Mac/.test(u) ? "Mac" : /Windows/.test(u) ? "Windows PC" : /Linux/.test(u) ? "Linux" : "this device";
+  };
+  const pkOops = e => (e && e.name === "NotAllowedError" ? "Passkey cancelled (or it timed out)." : e && e.name === "InvalidStateError" ? "This device already has a passkey for you." : (e && e.message) || "The passkey didn't work.");
+  async function addPasskey() {
+    if (busy) return;
+    if (!pkSupported()) { msg = "This browser can't do passkeys. A save code works everywhere."; return draw(); }
+    busy = true; msg = "Waiting for your fingerprint, face or PIN..."; draw();
+    try {
+      const o = (await api("POST", "/passkey", { action: "register_options" })).body;
+      if (!o.challenge) throw new Error(o.error || "The passkey didn't work.");
+      const cred = await navigator.credentials.create({ publicKey: {
+        ...o, token: undefined, challenge: fromB64(o.challenge), user: { ...o.user, id: fromB64(o.user.id) },
+        excludeCredentials: o.excludeCredentials.map(c => ({ ...c, id: fromB64(c.id) })) } });
+      const r = await api("POST", "/passkey", { action: "register", label: deviceName(), credential: {
+        id: cred.id, response: { clientDataJSON: toB64(cred.response.clientDataJSON), attestationObject: toB64(cred.response.attestationObject) } } });
+      if (!r.body.ok) throw new Error(r.body.error);
+      msg = "Passkey saved. On another device: [S]AVE, [4] LOG IN WITH A PASSKEY.";
+      acct = (await api("GET", "/account")).body;
+    } catch (e) { msg = pkOops(e); }
+    busy = false; draw();
+  }
+  async function loadWithPasskey() {
+    if (busy) return;
+    if (!pkSupported()) { msg = "This browser can't do passkeys. Use a save code."; return draw(); }
+    busy = true; msg = "Waiting for your passkey..."; draw();
+    try {
+      const post = async b => (await (await fetch(API + "/passkey", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) })).json());
+      const o = await post({ action: "login_options" });
+      if (!o.challenge) throw new Error(o.error || "The passkey didn't work.");
+      const cred = await navigator.credentials.get({ publicKey: { ...o, challenge: fromB64(o.challenge) } });
+      const d = await post({ action: "login", credential: { id: cred.id, response: { clientDataJSON: toB64(cred.response.clientDataJSON),
+        authenticatorData: toB64(cred.response.authenticatorData), signature: toB64(cred.response.signature) } } });
+      if (!d.token) throw new Error(d.error);
+      store.set("irl.token", d.token); popup = null; msg = "Logged in with your passkey. Your atlas is here now.";
+    } catch (e) { msg = pkOops(e); }
+    busy = false; draw();
+  }
+
+  // The new save code as a .txt file, for keeping somewhere safe.
+  function downloadCode() {
+    const text = ["irl-dungeon save code", "", "  " + newCode, "",
+      "This code logs you in as your player on any browser or device.",
+      "On that one: open " + location.origin + location.pathname + ", press [S]AVE, then [3] LOG IN WITH A SAVE CODE.",
+      "Keep it private: anyone with this code can log in as you.", "Made " + new Date().toISOString().slice(0, 10) + ".", ""].join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
     a.download = "irl-dungeon-save-code.txt";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    msg = "Save code downloaded."; draw();
+    msg = "Save code downloaded as a .txt file."; draw();
   }
 
   // SIGN LATER: put the player's consistent name on one of their finds. Appended on the server, never an edit.
@@ -238,7 +290,7 @@
   async function openAtlas() {
     popup = "atlas"; atlas = null; draw();
     if (!API) { atlas = { error: "Offline: there is no atlas without the server." }; return draw(); }
-    if (!getKey()) { atlas = { rows: [] }; return draw(); }
+    if (!getToken()) { atlas = { rows: [] }; return draw(); }
     try { atlas = (await api("GET", "/atlas")).body; if (!atlas.rows) atlas = { error: "Couldn't read the atlas." }; }
     catch (e) { atlas = { error: "The server didn't answer." }; }
     if (popup === "atlas") draw();
@@ -251,17 +303,19 @@
     const K = k.toUpperCase();
     if (popup === "key") {
       if (k === "Enter" || k === "Escape") popup = null;
-      else if ((K === "N" && getKey()) || (K === "R" && !getKey())) { popup = "keyentry"; keyDraft = ""; }
-      else if (K === "C" && !getKey()) { store.set("irl.key", makeKey()); msg = "Save code made."; }
-      else if (K === "D") { downloadKey(); return true; }
-      else if (K === "P" || k === "Passkey") { if (getKey()) makePasskey(); else usePasskey(); return true; } else return false;
+      else if (k === "1") { makeCode(); return true; }
+      else if (k === "2") { addPasskey(); return true; }
+      else if (k === "3") { popup = "keyentry"; keyDraft = ""; }
+      else if (k === "4") { loadWithPasskey(); return true; }
+      else if (K === "O") { logOut(); return true; } else return false;
+    } else if (popup === "newcode") {
+      if (k === "Escape" || k === "Enter") { popup = "key"; newCode = ""; openSave(); return true; }
+      else if (K === "D") { downloadCode(); return true; } else return false;
     } else if (popup === "keyentry") {
       if (k === "Escape") popup = "key";
       else if (k === "Backspace") keyDraft = keyDraft.replace(/-?.$/, "");
-      else if (k === "Enter") {
-        if (KEY_RE.test(keyDraft)) { store.set("irl.key", keyDraft); popup = null; msg = "Save code changed."; }
-        else msg = "That isn't a whole save code.";
-      } else if (/^[A-Z2-7]$/.test(K) && keyDraft.length < 39) keyDraft += (keyDraft.length % 5 === 4 ? "-" : "") + K;
+      else if (k === "Enter") { loadWithCode(); return true; }
+      else if (/^[0-9A-Z]$/.test(K) && keyDraft.length < 24) keyDraft += (keyDraft.length % 5 === 4 ? "-" : "") + K;
       else return false;
     } else if (popup === "atlas" && /^[1-9]$/.test(k)) { signFind(+k - 1); return true;
     } else if (popup === "atlas" || popup === "ledger" || popup === "map") {
@@ -272,16 +326,15 @@
     else if (K === "T") { openAtlas(); return true; }
     else if (K === "L") { openLedger(); return true; }
     else if (K === "M") { openMap(); return true; }
-    else if (K === "S") popup = "key";
+    else if (K === "S") { openSave(); return true; }
     else return false;
     draw(); return true;
   }
   document.addEventListener("keydown", e => { if (press(e.key)) e.preventDefault(); });
 
   // TAPPABLE BUTTONS: each bracketed control on screen is wrapped in a span that presses its key.
-  const BUTTONS = [["[  ^  ]", "ArrowUp"], ["[ < ]", "ArrowLeft"], ["[ > ]", "ArrowRight"], ["A[T]LAS", "t"], ["[C] MAKE A SAVE CODE", "c"], ["[R] RESTORE A SAVE CODE", "r"], ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => [`[${n}] SIGN`, String(n)]), ["[S]AVE", "s"], ["[D] DOWNLOAD .TXT", "d"], ["[N] ANOTHER CODE", "n"],
-    ["[S] SIGN IT", "s"], ["[ENTER] STAY ANON", "Enter"], ["[ENTER] OK", "Enter"], ["[P] PASSKEY", "Passkey"], ["[L]EDGER", "l"], ["[M]AP", "m"],
-    ["[ENTER] USE IT", "Enter"], ["[ESC] BACK", "Escape"]];
+  const BUTTONS = [["[  ^  ]", "ArrowUp"], ["[ < ]", "ArrowLeft"], ["[ > ]", "ArrowRight"], ["A[T]LAS", "t"], ["[1] NEW SAVE CODE", "1"], ["[2] ADD A PASSKEY", "2"], ["[3] LOG IN WITH A SAVE CODE", "3"], ["[4] LOG IN WITH A PASSKEY", "4"], ["[O] LOG OUT", "o"], ["[ESC] DONE", "Escape"], ["[ENTER] LOG IN", "Enter"], ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => [`[${n}] SIGN`, String(n)]), ["[S]AVE", "s"], ["[D] DOWNLOAD .TXT", "d"],
+    ["[L]EDGER", "l"], ["[M]AP", "m"], ["[ESC] BACK", "Escape"]];
   const buttons = html => BUTTONS.reduce((h, [label, key]) => h.split(esc(label)).join(`<span class="btn" data-k="${key}">${esc(label)}</span>`), html);
   out.addEventListener("click", e => { const b = e.target.closest(".btn"); if (b) press(b.dataset.k); });
 
