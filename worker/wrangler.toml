@@ -5,7 +5,7 @@ compatibility_date = "2024-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "irl-dungeon"
-database_id = "PASTE-THE-ID-FROM-wrangler-d1-create"
+database_id = "dd8ebe3a-2c52-4a61-a099-9989c041a629"
 
 [vars]
 # The pages allowed to call the API. The game's real address, no trailing slash; several are fine, comma-separated.
