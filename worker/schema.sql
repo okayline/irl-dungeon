@@ -51,3 +51,12 @@ CREATE TABLE IF NOT EXISTS public_ledger (
 );
 CREATE INDEX IF NOT EXISTS public_by_cell ON public_ledger (cell, seq);
 CREATE INDEX IF NOT EXISTS public_by_seq ON public_ledger (seq);
+
+-- SIGNATURES (v0.06): signing later is appended here, never an edit to the public ledger. A signed entry shows the
+-- player's consistent name; the public ledger row itself stays as it was written.
+CREATE TABLE IF NOT EXISTS signatures (
+  entry_id TEXT PRIMARY KEY,
+  seq INTEGER NOT NULL,
+  signed_name TEXT NOT NULL,
+  at_ms INTEGER NOT NULL
+);

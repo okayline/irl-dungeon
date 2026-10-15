@@ -74,16 +74,45 @@
     return { left: L, right: Rt, end, lock };
   }
 
-  // The panel minimap: one character per tile, a space between. @ is KURA, . a walked tile, : one not yet walked.
-  function minimap(w, x, y, walked) {
-    const rows = [];
-    for (let j = 0; j < w.size; j++) {
-      let r = "";
-      for (let i = 0; i < w.size; i++) r += (i ? " " : "") + (i === x && j === y ? "@" : walked.has(i + "," + j) ? "." : ":");
-      rows.push(r);
+  // The panel minimap, drawn the way daily-dungeon draws its floor: each walked tile is a room [ ] outlined in
+  // + - | walls (neighbors share a wall), opened wherever the way is open. Only walked tiles are drawn, the map is
+  // a window centered on KURA (5 rows, 29 columns), and it moves around her. The locked door shows #, and KURA's
+  // facing is an arrow in the gap on that side of her room.
+  function minimap(w, px, py, walked, facing) {
+    const W = 29, H = 5, rows = Array.from({ length: H }, () => Array(W).fill(" "));
+    const put = (r, c, s) => [...s].forEach((ch, k) => { if (r >= 0 && r < H && c + k >= 0 && c + k < W) rows[r][c + k] = ch; });
+    const seen = [];
+    for (let y = 0; y < w.size; y++) for (let x = 0; x < w.size; x++)
+      if (walked.has(x + "," + y)) seen.push({ x, y, row: 2 + (y - py) * 2, col: 13 + (x - px) * 4 });
+    const wall = Array.from({ length: H }, () => Array(W).fill(false)), vert = Array.from({ length: H }, () => Array(W).fill(false));
+    const mark = (r, c, v) => { if (r >= 0 && r < H && c >= 0 && c < W) wall[r][c] = v; };
+    for (const { row, col } of seen)
+      for (let r = row - 1; r <= row + 1; r++) for (let c = col - 1; c <= col + 3; c++) if (r !== row || c === col - 1 || c === col + 3) {
+        mark(r, c, true);
+        if ((c === col - 1 || c === col + 3) && r >= 0 && r < H && c >= 0 && c < W) vert[r][c] = true;   // a side wall keeps going past the edge of the window
+      }
+    const open = (row, col, d) => {
+      if (d === "E") mark(row, col + 3, false); if (d === "W") mark(row, col - 1, false);
+      if (d === "S") for (let k = 0; k < 3; k++) mark(row + 1, col + k, false);
+      if (d === "N") for (let k = 0; k < 3; k++) mark(row - 1, col + k, false);
+    };
+    const isDoor = (x, y, d) => !!(w.door && w.door.x === x && w.door.y === y && w.door.d === d);
+    for (const { x, y, row, col } of seen) for (const d of ORDER) if (!w.walls[y][x][d] || isDoor(x, y, d)) open(row, col, d);
+    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (wall[r][c]) {
+      const n = r > 0 ? wall[r - 1][c] : vert[r][c], s = r < H - 1 ? wall[r + 1][c] : vert[r][c], wl = c > 0 && wall[r][c - 1], e = c < W - 1 && wall[r][c + 1];
+      rows[r][c] = (n || s) && (wl || e) ? "+" : n || s ? "|" : "-";
     }
-    const pad = " ".repeat(Math.floor((28 - rows[0].length) / 2));
-    return rows.map(r => pad + r);
+    for (const { x, y, row, col } of seen) {
+      put(row, col, "[" + (x === px && y === py ? "@" : " ") + "]");
+      for (const d of ORDER) if (isDoor(x, y, d)) {
+        if (d === "E") put(row, col + 3, "#"); if (d === "W") put(row, col - 1, "#");
+        if (d === "S") put(row + 1, col + 1, "#"); if (d === "N") put(row - 1, col + 1, "#");
+      }
+    }
+    const arrow = (r, c, ch) => { if (rows[r][c] !== "#") put(r, c, ch); };
+    if (facing === "E") arrow(2, 16, ">"); else if (facing === "W") arrow(2, 12, "<");
+    else if (facing === "N") arrow(1, 14, "^"); else if (facing === "S") arrow(3, 14, "v");
+    return rows.map(r => r.join("").replace(/\s+$/, ""));
   }
 
   const api = { SIZE, DIRS, left, right, seedOf, generate, view, blocked, minimap };

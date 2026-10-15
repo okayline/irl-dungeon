@@ -1,10 +1,13 @@
 // irl-dungeon API: a Cloudflare Worker with a D1 database (binding DB). No dependencies.
 //   GET  /wing?cell=&path=      -> {committed:false} | {committed:true, wing, date, moon, name}
-//   POST /commit                -> {ok, entry, firstVisit} | 409 {error, wing}      (header: Authorization: Bearer <save key>)
-//          body {cell, path, day, moves, entry_id, proof, signed}
+//   POST /commit                -> {ok, entry} | 409 {error, wing}      (header: Authorization: Bearer <save code>)
+//          body {cell, path, day, moves, entry_id, proof}       every find goes in anonymous
+//   POST /sign   {entry_id}     -> {ok}   sign one of your own finds later: appended to signatures, never an edit
+//   GET  /cells?ids=a,b,c       -> {found: [cell, ...]}   which of up to 37 cells have a found first wing
 //   GET  /ledger?cell=          -> {rows: [...]}   public ledger, a cell's entries or the latest 50
-//   GET  /atlas                 -> {name, rows: [...]}   the player's own entries  (Authorization: Bearer <save key>)
-// The server never sees coordinates: only cell IDs. It never stores the save key: only its hash.
+//   GET  /atlas                 -> {name, rows: [...]}   the player's own entries  (Authorization: Bearer <save code>)
+// The server never sees coordinates: only cell IDs. It never stores the save code: only its hash.
+// The public side shows dates only, never times: the exact time stays in the private ledger.
 import WING from "../wing.js";
 
 const MOON_REF = Date.UTC(2000, 0, 6, 18, 14), SYN = 29.530588853;
@@ -56,8 +59,9 @@ function replay(w, moves) {
   return walked.size === w.size * w.size;
 }
 
-const publicRow = r => ({ cell: r.cell, path: r.path, date: r.date, minute: r.minute || null, moon: r.moon,
-  name: r.signed_name || r.anon, signed: !!r.signed_name, proof: r.proof, hash: r.commit_hash });
+// What the public sees of an entry. No time: older rows written with a minute never show it either.
+const publicRow = r => ({ cell: r.cell, path: r.path, date: r.date, moon: r.moon,
+  name: r.sname || r.anon, signed: !!r.sname, proof: r.proof, hash: r.commit_hash });
 
 export default {
   async fetch(req, env) {
@@ -68,16 +72,16 @@ export default {
       if (req.method === "GET" && path === "/wing") {
         const cell = url.searchParams.get("cell") || "", wp = url.searchParams.get("path") || "";
         if (!CELL_RE.test(cell) || wp !== "") return json(h, { error: "bad cell" }, 400);
-        const w = await db.prepare("SELECT w.snapshot, w.moon, p.date, p.signed_name FROM wings w JOIN public_ledger p ON p.entry_id = w.entry_id WHERE w.cell = ?1 AND w.path = ?2").bind(cell, wp).first();
+        const w = await db.prepare("SELECT w.snapshot, w.moon, p.date, s.signed_name FROM wings w JOIN public_ledger p ON p.entry_id = w.entry_id LEFT JOIN signatures s ON s.entry_id = w.entry_id WHERE w.cell = ?1 AND w.path = ?2").bind(cell, wp).first();
         if (!w) return json(h, { committed: false });
         return json(h, { committed: true, wing: JSON.parse(w.snapshot), date: w.date, moon: w.moon, name: w.signed_name || null });
       }
 
       if (req.method === "POST" && path === "/commit") {
         const p = await playerFrom(req, db);
-        if (!p) return json(h, { error: "no save key" }, 401);
+        if (!p) return json(h, { error: "no save code" }, 401);
         const b = await req.json().catch(() => ({}));
-        const { cell, day, moves, entry_id, proof } = b, wp = b.path || "", signed = !!b.signed;
+        const { cell, day, moves, entry_id, proof } = b, wp = b.path || "", signed = false;   // (v0.06) always anonymous; sign later
         if (!CELL_RE.test(cell || "") || wp !== "" || !ID_RE.test(entry_id || "") || !HEX64.test(proof || "")) return json(h, { error: "bad request" }, 400);
         // The day must be today somewhere on Earth: within a day of UTC's.
         const now = Date.now(), utcDay = Math.floor(now / 86400000);
@@ -99,24 +103,44 @@ export default {
           db.prepare("INSERT INTO wings (cell, path, day, moon, snapshot, entry_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(cell, wp, day, moon, JSON.stringify(w), entry_id),
           db.prepare("INSERT INTO private_ledger (entry_id, seq, player_id, cell, path, day, at_ms, signed, commit_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)").bind(entry_id, seq, p.id, cell, wp, day, now, priv.signed, commit_hash),
           db.prepare("INSERT INTO public_ledger (entry_id, seq, cell, path, date, minute, moon, anon, signed_name, proof, commit_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)")
-            .bind(entry_id, seq, cell, wp, iso.slice(0, 10), signed ? null : iso.slice(11, 16), moon, anon, signed ? p.name : null, proof, commit_hash),
+            .bind(entry_id, seq, cell, wp, iso.slice(0, 10), null, moon, anon, null, proof, commit_hash),   // no minute: dates only
         ]);
-        return json(h, { ok: true, entry: { cell, path: wp, date: iso.slice(0, 10), moon, name: signed ? p.name : anon, signed } });
+        return json(h, { ok: true, entry: { entry_id, cell, path: wp, date: iso.slice(0, 10), moon, name: anon, signed } });
+      }
+
+      if (req.method === "POST" && path === "/sign") {
+        const p = await playerFrom(req, db);
+        if (!p) return json(h, { error: "no save code" }, 401);
+        const b = await req.json().catch(() => ({}));
+        if (!ID_RE.test(b.entry_id || "")) return json(h, { error: "bad request" }, 400);
+        const mine = await db.prepare("SELECT entry_id FROM private_ledger WHERE entry_id = ?1 AND player_id = ?2").bind(b.entry_id, p.id).first();
+        if (!mine) return json(h, { error: "not yours" }, 403);
+        const seqRow = await db.prepare("SELECT COALESCE(MAX(seq), 0) + 1 AS n FROM signatures").first();
+        await db.prepare("INSERT INTO signatures (entry_id, seq, signed_name, at_ms) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (entry_id) DO NOTHING").bind(b.entry_id, seqRow.n, p.name, Date.now()).run();
+        return json(h, { ok: true, name: p.name });
+      }
+
+      // Which of these cells have a found first wing (for the map of the cells around the player). Up to 37 at once.
+      if (req.method === "GET" && path === "/cells") {
+        const ids = (url.searchParams.get("ids") || "").split(",").filter(c => CELL_RE.test(c)).slice(0, 37);
+        if (!ids.length) return json(h, { found: [] });
+        const q = `SELECT cell FROM wings WHERE path = '' AND cell IN (${ids.map((_, i) => "?" + (i + 1)).join(",")})`;
+        return json(h, { found: (await db.prepare(q).bind(...ids).all()).results.map(r => r.cell) });
       }
 
       if (req.method === "GET" && path === "/ledger") {
         const cell = url.searchParams.get("cell");
         const q = cell && CELL_RE.test(cell)
-          ? db.prepare("SELECT * FROM public_ledger WHERE cell = ?1 ORDER BY seq DESC LIMIT 50").bind(cell)
-          : db.prepare("SELECT * FROM public_ledger ORDER BY seq DESC LIMIT 50");
+          ? db.prepare("SELECT p.*, s.signed_name AS sname FROM public_ledger p LEFT JOIN signatures s ON s.entry_id = p.entry_id WHERE p.cell = ?1 ORDER BY p.seq DESC LIMIT 50").bind(cell)
+          : db.prepare("SELECT p.*, s.signed_name AS sname FROM public_ledger p LEFT JOIN signatures s ON s.entry_id = p.entry_id ORDER BY p.seq DESC LIMIT 50");
         return json(h, { rows: (await q.all()).results.map(publicRow) });
       }
 
       if (req.method === "GET" && path === "/atlas") {
         const p = await playerFrom(req, db);
-        if (!p) return json(h, { error: "no save key" }, 401);
-        const rows = (await db.prepare("SELECT p.* FROM private_ledger v JOIN public_ledger p ON p.entry_id = v.entry_id WHERE v.player_id = ?1 ORDER BY v.seq DESC LIMIT 200").bind(p.id).all()).results;
-        return json(h, { name: p.name, rows: rows.map(r => ({ ...publicRow(r), name: p.name })) });
+        if (!p) return json(h, { error: "no save code" }, 401);
+        const rows = (await db.prepare("SELECT p.*, s.signed_name AS sname FROM private_ledger v JOIN public_ledger p ON p.entry_id = v.entry_id LEFT JOIN signatures s ON s.entry_id = p.entry_id WHERE v.player_id = ?1 ORDER BY v.seq DESC LIMIT 200").bind(p.id).all()).results;
+        return json(h, { name: p.name, rows: rows.map(r => ({ ...publicRow(r), entry_id: r.entry_id, name: p.name })) });
       }
 
       return json(h, { error: "not found" }, 404);
