@@ -19,58 +19,64 @@
     return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }
 
-  // Build the wing: a maze carved from the seed (every tile reachable), a few extra openings so it isn't all
-  // corridors, the entrance on the south edge, and on a cell's first wing the one locked door, set in an outer wall.
+  // Build the wing, the way daily-dungeon builds one (floor.js): a few SPACES joined by open doors, one step each.
+  //   K  the room you come in to,
+  //   P  a passage (no brackets on the map),
+  //   X  a dead end,
+  //   and sometimes a second room, R.
+  // Laid out as a chain (K-P-X) or a star (P and X both off K), on a small grid. On a cell's first wing, one wall of
+  // the room or the passage holds the locked door. Clearing a wing means stepping into every space.
   function generate(cell, day, path) {
     path = path || "";
     const rand = stream(seedOf(`${cell}|${day}|${path}`));
     const R = n => Math.floor(rand() * n);
-    // walls[y][x] holds the sides of that tile that are walled: { N, E, S, W }
-    const walls = Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => ({ N: true, E: true, S: true, W: true })));
-    const seen = Array.from({ length: SIZE }, () => Array(SIZE).fill(false));
-    const start = { x: Math.floor(SIZE / 2), y: SIZE - 1 };
-    const stack = [start]; seen[start.y][start.x] = true;
-    while (stack.length) {
-      const cur = stack[stack.length - 1];
-      const open = ORDER.filter(d => { const [dx, dy] = DIRS[d], nx = cur.x + dx, ny = cur.y + dy; return nx >= 0 && ny >= 0 && nx < SIZE && ny < SIZE && !seen[ny][nx]; });
-      if (!open.length) { stack.pop(); continue; }
-      const d = open[R(open.length)], [dx, dy] = DIRS[d], nx = cur.x + dx, ny = cur.y + dy;
-      walls[cur.y][cur.x][d] = false; walls[ny][nx][OPP[d]] = false; seen[ny][nx] = true;
-      stack.push({ x: nx, y: ny });
-    }
-    for (let k = 0; k < 3; k++) {                    // a few extra openings
-      const x = R(SIZE - 1), y = R(SIZE);
-      walls[y][x].E = false; walls[y][x + 1].W = false;
-    }
-    // The locked door (first wing only): an outer wall of a tile on the far half, never the entrance's.
-    let door = null;
-    if (path === "") {
-      const spots = [];
-      for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) for (const d of ORDER) {
-        const [dx, dy] = DIRS[d], nx = x + dx, ny = y + dy;
-        if ((nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE) && y < SIZE - 1) spots.push({ x, y, d });
+    const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = R(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    for (let tries = 0; ; tries++) {
+      const walls = Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => ({ N: true, E: true, S: true, W: true })));
+      const kinds = {}, spaces = [];
+      const start = { x: 2, y: 2 };
+      const put = (p, kind) => { kinds[p.x + "," + p.y] = kind; spaces.push({ x: p.x, y: p.y }); };
+      const free = p => p.x >= 0 && p.y >= 0 && p.x < SIZE && p.y < SIZE && !((p.x + "," + p.y) in kinds);
+      // A free space next to `from`, joined to it by an open door.
+      const grow = (from, kind) => {
+        for (const d of shuffle(ORDER.slice())) {
+          const [dx, dy] = DIRS[d], p = { x: from.x + dx, y: from.y + dy };
+          if (!free(p)) continue;
+          walls[from.y][from.x][d] = false; walls[p.y][p.x][OPP[d]] = false;
+          put(p, kind); return p;
+        }
+        return null;
+      };
+      put(start, "room");
+      const P = grow(start, "hall");
+      const X = P && grow(rand() < 0.5 ? P : start, "dead");          // chain: off the passage; star: off the room
+      const R2 = X && rand() < 0.5 ? grow(rand() < 0.5 ? P : start, "room") : true;   // sometimes a second room
+      if (!P || !X || !R2) { if (tries < 50) continue; }
+      // The locked door (first wing only): a wall of the room or the passage with nothing built behind it.
+      let door = null;
+      if (path === "") {
+        const spots = [];
+        for (const sp of [start, P]) if (sp) for (const d of ORDER) {
+          const [dx, dy] = DIRS[d], q = { x: sp.x + dx, y: sp.y + dy };
+          if (walls[sp.y][sp.x][d] && free(q)) spots.push({ x: sp.x, y: sp.y, d });
+        }
+        door = spots.length ? spots[R(spots.length)] : null;
       }
-      door = spots[R(spots.length)];
+      return { cell, day, path, size: SIZE, walls, start, door, spaces, kinds };
     }
-    return { cell, day, path, size: SIZE, walls, start, door };
   }
 
   const isDoor = (w, x, y, d) => !!(w.door && w.door.x === x && w.door.y === y && w.door.d === d);
   const blocked = (w, x, y, d) => w.walls[y][x][d];
   const left = { N: "W", E: "N", S: "E", W: "S" }, right = { N: "E", E: "S", S: "W", W: "N" };
 
-  // What KURA sees, in daily-dungeon's terms: wall flags for the two segments ahead on each side, and what ends
-  // the view (a plain wall, the locked door, or the dark when the way runs on).
+  // What KURA sees, in daily-dungeon's terms: the walls of the space she stands in (left and right), and what is
+  // ahead: a plain wall, an open door into the next space, or the locked door.
   function view(w, x, y, f) {
-    const L = [], Rt = [];
-    let cx = x, cy = y, end = "wall", lock = "";
-    for (let k = 0; k < 2; k++) {
-      L.push(blocked(w, cx, cy, left[f])); Rt.push(blocked(w, cx, cy, right[f]));
-      if (blocked(w, cx, cy, f)) { if (isDoor(w, cx, cy, f)) { end = "door"; lock = "+"; } break; }
-      if (k === 1) { end = "dark"; break; }
-      const [dx, dy] = DIRS[f]; cx += dx; cy += dy;
-    }
-    while (L.length < 2) { L.push(true); Rt.push(true); }
+    const L = [blocked(w, x, y, left[f]), true], Rt = [blocked(w, x, y, right[f]), true];
+    let end = "wall", lock = "";
+    if (!blocked(w, x, y, f)) end = "door";
+    else if (isDoor(w, x, y, f)) { end = "door"; lock = "+"; }
     return { left: L, right: Rt, end, lock };
   }
 
@@ -103,7 +109,8 @@
       rows[r][c] = (n || s) && (wl || e) ? "+" : n || s ? "|" : "-";
     }
     for (const { x, y, row, col } of seen) {
-      put(row, col, "[" + (x === px && y === py ? "@" : " ") + "]");
+      const me = x === px && y === py ? "@" : " ", hall = w.kinds && w.kinds[x + "," + y] === "hall";
+      put(row, col, hall ? " " + me + " " : "[" + me + "]");   // a passage has no brackets (as in daily-dungeon)
       for (const d of ORDER) if (isDoor(x, y, d)) {
         if (d === "E") put(row, col + 3, "#"); if (d === "W") put(row, col - 1, "#");
         if (d === "S") put(row + 1, col + 1, "#"); if (d === "N") put(row - 1, col + 1, "#");
@@ -115,7 +122,8 @@
     return rows.map(r => r.join("").replace(/\s+$/, ""));
   }
 
-  const api = { SIZE, DIRS, left, right, seedOf, generate, view, blocked, minimap };
+  const spaceCount = w => (w.spaces ? w.spaces.length : w.size * w.size);
+  const api = { SIZE, DIRS, left, right, seedOf, generate, view, blocked, minimap, spaceCount };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.WING = api;
 })(this);

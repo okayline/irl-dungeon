@@ -67,7 +67,7 @@
     .replace(/[░▒▓█◆╭╮╰╯─│]/g, ch => `<span class="cell${/[░▒▓█]/.test(ch) ? " ph" : ""}"><span class="g">${ch}</span></span>`)
     .replace(/([一-鿿])/g, '<span class="kanji"><span class="g">$1</span></span>');
   const short = cell => cell.replace(/f+$/, "").slice(-4);
-  const total = () => game.w.size * game.w.size;
+  const total = () => WING.spaceCount(game.w);   // the spaces in the wing: a room, a passage, a dead end (sometimes two rooms)
   const pad = (s, n) => (s + " ".repeat(n)).slice(0, n);
 
   function draw() {

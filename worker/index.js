@@ -84,7 +84,7 @@ function replay(w, moves) {
       walked.add(x + "," + y);
     }
   }
-  return walked.size === w.size * w.size;
+  return walked.size === WING.spaceCount(w);   // every space of the wing stepped into
 }
 
 // What the public sees of an entry. No time: older rows written with a minute never show it either.
