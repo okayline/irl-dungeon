@@ -3,7 +3,7 @@
 (function () {
   // The Worker's address, no trailing slash. Blank plays offline: nothing is sent or loaded.
   // ?api=<url> overrides it (for testing).
-  const API = new URLSearchParams(location.search).get("api") || "";
+  const API = new URLSearchParams(location.search).get("api") || "https://irl-dungeon.ddddungeon.workers.dev";
   const RES = 10;                                   // H3 resolution 10: cells of roughly 100 m
   const out = document.getElementById("screen");
   const tz = SMT.zone();
