@@ -82,6 +82,11 @@ test("stairs end up built in a walked, unstuck floor", () => {
   for (const [s, p, d] of seeds(1000)) { const f = walk(s, p, d); if (!f.stuck) assert.ok(f.rooms[f.stairs], "stairs not built"); }
 });
 
+test("rooms are empty: only position, doors, wing and passage/dead-end flags", () => {
+  for (const [s, p, d] of seeds(300)) for (const r of walk(s, p, d).rooms) if (r)
+    for (const k of Object.keys(r)) assert.ok(["r", "c", "doors", "wing", "hall", "dead"].includes(k), `unexpected room field ${k}`);
+});
+
 test("KNOWN GAP: a walk can strand a floor with one-space wings (about 1 in 700 on days 6-7 with this walk). Recorded, not hidden.", () => {
   let stuck = 0;
   for (const [s, p, d] of seeds(20000)) if (walk(s, p, d).stuck) stuck++;

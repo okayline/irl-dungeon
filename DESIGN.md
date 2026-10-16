@@ -52,11 +52,11 @@ Status: **foundation plus 4Dungeon's floor generator** (players, save codes, pas
 
 ## `src/floor.js` (copied from 4Dungeon)
 
-Identical to `daily-dungeon/floor.js` (43cebc2) except the module wrapper. `test/floor.test.mjs` checks 4Dungeon's rules from outside. Findings:
+Trimmed from `daily-dungeon/floor.js` (43cebc2): wing layout and door/sealing code kept, module wrapper added, and all room contents (kinds, demons, items, silver, clues, locker, bonus, void, painted doors) and the minimap/heat map removed. **Rooms are empty for now.** Without kinds, the two doors of a pair differ only in where they lead. The map drawing can be copied back from 4Dungeon when there is a screen. `test/floor.test.mjs` checks 4Dungeon's rules from outside. Findings:
 - A walk builds days+1 wings, not four as its header says.
 - Wings are 3 spaces; about 0.03% are a 1-space fallback.
 - `floor.stuck` is reachable: about 1 in 700 greedy walks on 6 to 7 day floors (the header says never in practice). Worth fixing in 4Dungeon too.
-- It still carries demons, items, silver, clues, room kinds, bonus and void rooms and a heat map. None is wired up here. **Open: what do rooms hold?** Trim or keep unused?
+- **Open: what do rooms hold?** Empty for now.
 - The server can only check an unlock if it knows the shared seed and the player's private `pseed`/`sym` (door directions are rotated per player).
 
 ## Recoverable from the old version

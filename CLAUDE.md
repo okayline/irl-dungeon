@@ -9,4 +9,4 @@
 - **No new dependencies** without asking. There are none today.
 - **`src/saves.js` and `src/passkeys.js` are copies** from dawn-baton (which got them from scoundrel.exe and the 88x31 cLuB). Keep them identical apart from names, and put a fix in every repo that has them.
 - Times in changelogs are Hawaii time (HST). The changelog starts with the first release.
-- **`src/floor.js` is a copy** of `daily-dungeon/floor.js`, identical apart from the module wrapper. Put a fix in both repos.
+- **`src/floor.js` is trimmed from** `daily-dungeon/floor.js` (43cebc2): the wing and door code is unchanged, but room contents and screen drawing are removed (rooms are empty for now). A fix to the wing or door code goes in both repos.
