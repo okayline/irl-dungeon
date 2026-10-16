@@ -44,7 +44,8 @@ const wingKeyOf = (floor, doors, i) => ["0", ...doors.slice(0, i)].join(">");
 // A step forward. Through an open door it moves you (and reports any wing now walked in full); into a locked door it
 // first asks, and a second step into the same door spends today's key. Anything else (a turn, another door) cancels.
 export async function forward(st, api, offset = offsetNow()) {
-  const { unlock, ...moved } = step(st);
+  const { unlock, search: wall, ...moved } = step(st);
+  if (wall !== undefined) return searchWall({ ...moved, confirm: undefined }, wall, api, offset);
   if (unlock === undefined) return report({ ...moved, confirm: undefined }, api);
   const s = { ...moved, log: st.log };
   if (!s.loaded) return { ...s, confirm: undefined, log: "> The door won't move yet. Still opening this cell." };
@@ -55,6 +56,27 @@ export async function forward(st, api, offset = offsetNow()) {
   FLOOR.growDoor(s.floor, unlock);
   if (r.test) return { ...s, confirm: undefined, doors: [...(s.doors || []), unlock], log: "> The door opens. (Test mode: no key used.)" };
   return { ...s, confirm: undefined, keyReady: false, doors: [...(s.doors || []), unlock], log: "> Today's key turns. The door opens." };
+}
+
+// What a search of a wall turns up on a miss (copied from 4Dungeon, daily-dungeon/rules.js MISSES and NOISES).
+export const MISSES = ["Nothing.", "Nothing yet.", "Only stone.", "Nothing but dust.", "The wall gives nothing away.",
+  "Cold stone, cold hands.", "Mortar, mostly. Some is older.", "Fingers come away gray.", "A crack. It goes nowhere.",
+  "Damp. The smell of old pipes.", "Someone has looked here before.", "A dead cable runs in and stops.",
+  "Faded paint. A number, or a sigil.", "Old tally marks, in groups of five.", "Salt along the base, in a line."];
+export const NOISES = ["You hear something. Then nothing.", "A faint scrape, and then quiet.", "Something ticks, very softly.",
+  "A low sound. You hold your breath.", "A small sound, there and gone.", "You hear a soft knock. Or your own pulse."];
+const pickOf = (a, pick) => a[Math.floor(pick() * a.length)];
+
+// A step into a wall searches it. The server decides what the room hides today (the same for everyone) and counts this
+// player's searches; a find comes back as `popup` for the page to show: "You found <name>!".
+async function searchWall(st, dir, api, offset, pick = Math.random) {
+  const where = `> You search the ${WORD[dir]} wall...`;
+  if (!st.loaded) return { ...st, log: "> A wall. Still opening this cell." };
+  const r = await ask(api, "search", { cell: st.cell, room: st.at, dir, offset });
+  if (r.error) return { ...st, log: "> " + r.error };
+  if (r.result === "found") return { ...st, popup: r.item, log: `${where} You found ${r.item.name}!` };
+  if (r.result === "done") return { ...st, log: `${where} Nothing more here today.` };
+  return { ...st, log: `${where} ${pickOf(r.noise ? NOISES : MISSES, pick)}` };
 }
 
 export const turned = (st) => ({ ...st, confirm: undefined });

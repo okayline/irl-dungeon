@@ -22,11 +22,12 @@ export function facing(st) {
 }
 
 // A step. For a locked door the result carries `unlock: <door number>`: the caller asks the server and, if it says yes,
-// opens that door and logs it. Nothing else moves.
+// opens that door and logs it. A wall (outside the start room) carries `search: <N|E|S|W>`: pressing into a wall searches it.
+// Nothing else moves.
 export function step(st, pick = (a) => a[Math.floor(Math.random() * a.length)]) {
   if (!st.floor) return st;
   const f = facing(st);
-  if (f.kind === "wall") return st.at === 0 ? { ...st, leave: st.facing } : { ...st, log: "> A wall." };
+  if (f.kind === "wall") return st.at === 0 ? { ...st, leave: st.facing } : { ...st, search: st.facing };
   if (f.kind === "sealed") return { ...st, log: "> " + pick(SEALED) };
   if (f.kind === "locked") return { ...st, unlock: f.door };
   const visited = st.visited.slice(); visited[f.door] = true;

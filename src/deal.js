@@ -32,3 +32,6 @@ export function dealt(pool, key, n) {
   if (!pool.length) return null;
   return deck(pool, key, Math.floor(n / pool.length))[n % pool.length];
 }
+
+// ---------- the same generator, for the room's secret: where it hides, how hard it is, and how rare ----------
+export { seedFrom, rng };

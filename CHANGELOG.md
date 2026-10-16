@@ -2,6 +2,13 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.08 - Hidden Things - Oct 15 2026, 09:10 PM HST
+
+- **Search the walls.** In any room except a cell's first, press into a wall (up) to search it. Most walls hold nothing. Some rooms hide something behind one wall, and it takes 5 to 10 searches to turn it up. Once you have a few searches in, a faint noise can tell you you're close.
+- **You found something.** A window says what you found. Items come from one shared item table used by all the games (4Dungeon's items, and 88x31 buttons). You can find one thing per room per day, and two players never find the same kind in a room on the same day.
+- **[I]NVOKE** shows everything you've found. The bottom menu is simpler: TURN [A] [D], [I]NVOKE, [L]OCATE, [S]AVE.
+- For now, rooms hold common, uncommon and rare things. Moon things don't drop yet.
+
 ## v0.07 - Sandbox - Oct 15 2026, 08:00 PM HST
 
 - **Test mode for the admin.** A switch in [S]AVE opens a sandbox: no key limit, no travel limit, and nothing you do there counts or shows up for anyone. Switching it off takes you back to where you turned it on, with your real game exactly as you left it.

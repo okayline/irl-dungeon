@@ -28,7 +28,10 @@ import { isCell, guessCell } from "../public/place.js";
 import { travelCheck, waitText } from "./travel.js";
 import { nameText, freeName } from "./names.js";
 import { LAYER, buildFloor, wingKey, finishedWings } from "./game.js";
-import { localDay, dayFor, offsetCheck, BadOffset } from "./day.js";
+import { localDay, dayFor, offsetCheck, BadOffset, dayText } from "./day.js";
+import { listItems, getItems } from "./items.js";
+import { deckKey, dealt } from "./deal.js";
+import { hides, WALLS, NEAR_AFTER, NEAR_CHANCE } from "./search.js";
 import { MAX_CODES, newSaveCode, hashCode, newSession, newToken, rateLimit } from "./saves.js";
 import { registerOptions, verifyRegistration, loginOptions, verifyLogin } from "./passkeys.js";
 
@@ -46,7 +49,7 @@ const ROUTES = {
   "GET /api/account": account, "POST /api/codes": codes, "POST /api/load": loadCode,
   "POST /api/passkey": passkey, "POST /api/logout": logout,
   "GET /api/ledger": ledger, "GET /api/here": here, "GET /api/verify": verify,
-  "POST /api/run": run, "POST /api/sign": sign, "POST /api/name": rename, "POST /api/cells": cells, "POST /api/admin": admin, "POST /api/unlock": unlock, "POST /api/walk": walk,
+  "POST /api/run": run, "POST /api/sign": sign, "POST /api/name": rename, "POST /api/cells": cells, "POST /api/admin": admin, "POST /api/unlock": unlock, "POST /api/walk": walk, "POST /api/search": search, "GET /api/finds": finds,
 };
 
 export default {
@@ -293,6 +296,57 @@ async function unlock(ctx) {
       .bind(r.me.id, b.cell, LAYER, b.door, day, offsetCheck(b.offset, req.cf && req.cf.timezone, ctx.t), sec(ctx.t)).run();
   } catch (e) { if (isUnique(e)) throw new Oops("The door won't unlock. Today's key is spent. Another comes tomorrow.", 403); throw e; }
   return { ok: true, door: b.door, day };
+}
+
+// Pressing into a wall searches it (rules in src/search.js). What the room hides today is the same for everyone; each
+// player's work on it is theirs. When the searches on the right wall reach what it needs, the player finds an item,
+// dealt from that room-day's shuffled deck of one rarity (src/deal.js) out of the shared item table (src/items.js).
+// Answers { result: "miss", noise? }, { result: "done" } (already found today), or { result: "found", item }.
+async function search(ctx) {
+  const b = await body(ctx), { db, env, req } = ctx;
+  if (!(await rateLimit(env, req, "search", 1200, 3600))) throw new Oops("Too many tries. Try again later.", 429);
+  need(WALLS.includes(b.dir), "That isn't a wall.");
+  need(Number.isInteger(b.room) && b.room >= 0, "That isn't a room.");
+  const r = await theRun(ctx, b, false), room = r.floor.rooms[b.room];
+  need(room, "That room isn't built.");
+  need(b.room !== r.floor.start, "The start room's walls are the way out.");
+  need(room.doors[b.dir] === undefined, "That isn't a wall.");
+  if (!r.test) needCredit(r);
+  const last = r.test ? null : (await db.prepare("SELECT MAX(day) AS d FROM finds WHERE player_id = ?").bind(r.me.id).first()).d;
+  const day = dayOf(ctx, b.offset, last), spot = `${wingKey(r.doors, room.wing)}:${b.room}`;
+  const hid = hides(room, `${b.cell}|${spot}|${day}`);
+  if (!hid || hid.wall !== b.dir) return { result: "miss" };                         // a bare wall never answers
+  const pool = await listItems(env, { rarity: hid.rarity });
+  if (!pool.length) return { result: "miss" };
+  const showItem = (it, copy) => ({ id: it.id, name: it.name, rarity: it.rarity, note: it.note, type: it.type, image: it.image, copy });
+  if (r.test) return { result: "found", item: showItem(pool.find((i) => i.id === dealt(pool, deckKey(b.cell, spot, day, hid.rarity), 0)), null), test: true };
+  if (await db.prepare("SELECT 1 AS x FROM finds WHERE player_id = ? AND cell = ? AND layer = ? AND spot = ? AND day = ?").bind(r.me.id, b.cell, LAYER, spot, day).first()) return { result: "done" };
+  const got = await db.prepare("INSERT INTO search_prog (player_id, cell, layer, spot, day, searches) VALUES (?,?,?,?,?,1) ON CONFLICT (player_id, cell, layer, spot, day) DO UPDATE SET searches = searches + 1 RETURNING searches")
+    .bind(r.me.id, b.cell, LAYER, spot, day).first();
+  if (got.searches < hid.need) return { result: "miss", noise: got.searches >= NEAR_AFTER && Math.random() < NEAR_CHANCE };
+  const key = deckKey(b.cell, spot, day, hid.rarity);
+  for (let tries = 0; tries < 8; tries++) {
+    const pos = (await db.prepare("SELECT COUNT(*) AS n FROM finds WHERE cell = ? AND layer = ? AND spot = ? AND day = ?").bind(b.cell, LAYER, spot, day).first()).n;
+    const item = pool.find((i) => i.id === dealt(pool, key, pos));
+    const copy = (await db.prepare("SELECT COUNT(*) AS n FROM finds WHERE item_id = ?").bind(item.id).first()).n + 1;
+    try {
+      await db.prepare("INSERT INTO finds (player_id, cell, layer, spot, day, rarity, deck_pos, item_id, copy, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
+        .bind(r.me.id, b.cell, LAYER, spot, day, hid.rarity, pos, item.id, copy, sec(ctx.t)).run();
+      return { result: "found", item: showItem(item, copy) };
+    } catch (e) {
+      if (!isUnique(e)) throw e;
+      if (await db.prepare("SELECT 1 AS x FROM finds WHERE player_id = ? AND cell = ? AND layer = ? AND spot = ? AND day = ?").bind(r.me.id, b.cell, LAYER, spot, day).first()) return { result: "done" };
+    }                                                                                // someone else took that place or copy a moment ago: try the next
+  }
+  throw new Oops("Something got in the way. Search again.", 409);
+}
+
+// GET /api/finds: what this player has found, newest first (the INVOKE screen). Item details come from the shared table.
+async function finds(ctx) {
+  const me = await must(ctx);
+  const rows = (await ctx.db.prepare("SELECT id, day, copy, item_id FROM finds WHERE player_id = ? ORDER BY id DESC LIMIT 200").bind(me.id).all()).results;
+  const items = rows.length ? await getItems(ctx.env, rows.map((r) => r.item_id)) : {};
+  return { finds: rows.map((r) => ({ id: r.id, day: dayText(r.day), copy: r.copy, item: items[r.item_id] ? { name: items[r.item_id].name, rarity: items[r.item_id].rarity, type: items[r.item_id].type, note: items[r.item_id].note, image: items[r.item_id].image } : { name: "an item that has gone missing", rarity: "common", type: null, note: null, image: null } })) };
 }
 
 // The rooms the player has stood in. Any wing this completes is recorded for them; if nobody had finished that wing

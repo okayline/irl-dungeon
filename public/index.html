@@ -37,13 +37,14 @@
   .viewpop .top { position: sticky; top: 0; background: var(--bg); padding-top: 0.5em; }
     .viewpop .code { -webkit-user-select: text; user-select: text; }
   .viewpop .btn { display: inline-block; }
+  .foundpic { image-rendering: pixelated; width: 88px; height: 31px; margin: 0.4em 0; display: block; }
   .codebox { font: inherit; background: var(--bg); color: var(--fg); border: 1px solid var(--trail); width: 26ch; padding: 0 4px; text-transform: uppercase; }
   .cell .g { font-family: "DejaVu Sans Mono", Menlo, Consolas, "Segoe UI Symbol", monospace; line-height: 0; }
 </style>
 </head>
 <body>
   <div class="frame"><pre id="screen">LOADING...</pre>
-    <div id="save" class="viewpop" role="dialog" aria-modal="true" aria-label="Save codes and passkeys" hidden><pre></pre></div><div id="ver" class="ver"></div></div>
+    <div id="save" class="viewpop" role="dialog" aria-modal="true" aria-label="Save codes and passkeys" hidden><pre></pre></div><div id="found" class="viewpop" role="dialog" aria-modal="true" aria-label="You found something" hidden><pre></pre></div><div id="invoke" class="viewpop" role="dialog" aria-modal="true" aria-label="Your finds" hidden><pre></pre></div><div id="ver" class="ver"></div></div>
 <script type="module">
   import { renderScreen, VERSION, WORD } from "./screen.js";
   import { turn } from "./walk.js";
@@ -51,6 +52,8 @@
   import FLOOR from "./floor.js";
   import { isCell, locate, neighbour } from "./place.js";
   import { openSave, api } from "./account.js";
+  import { openFound } from "./found.js";
+  import { openInvoke } from "./invoke.js";
 
   const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "Pacific/Honolulu"; } })();
@@ -96,7 +99,7 @@
         const R = esc(r).replace("[Y] SIGN IT", '<span class="btn" data-act="Y">[Y] SIGN IT</span>').replace("[U] UNSIGN", '<span class="btn" data-act="U">[U] UNSIGN</span>').replace("@", '<span class="you">@</span>').replace(/#/g, '<span class="door">#</span>');
         return L + R;
       }
-      if (i === 28) return boxed(esc(line)).replace("[L]OCATE", '<span class="btn" data-act="G">[L]OCATE</span>').replace("[S]AVE", '<span class="btn" data-act="S">[S]AVE</span>');
+      if (i === 28) return boxed(esc(line)).replace("[I]NVOKE", '<span class="btn" data-act="I">[I]NVOKE</span>').replace("[L]OCATE", '<span class="btn" data-act="G">[L]OCATE</span>').replace("[S]AVE", '<span class="btn" data-act="S">[S]AVE</span>');
       return boxed(esc(line));
     }).join("\n");
   }
@@ -113,7 +116,14 @@
     const rows = scr.textContent.split("\n").length, rh = r.height / rows, cw = r.width / 80;
     Object.assign(box.style, { left: scr.offsetLeft + cw + "px", top: scr.offsetTop + 6 * rh + "px", width: 47 * cw + "px", height: 17 * rh + "px", padding: `0 ${cw}px ${rh / 2}px` });   // no top padding: the pinned head sits flush, so nothing shows above it
   }
-  addEventListener("resize", () => { if (saveOpen()) placeInView(document.getElementById("save")); });
+  const foundOpen = () => !document.getElementById("found").hidden;
+  const invokeOpen = () => !document.getElementById("invoke").hidden;
+  let invokePanel = null;
+  function openInvokePanel() { if (invokeOpen()) return; const box = document.getElementById("invoke"); placeInView(box); invokePanel = openInvoke(box, { fetchApi: api, onClose: () => { invokePanel = null; draw(); } }); }
+  addEventListener("resize", () => { if (saveOpen()) placeInView(document.getElementById("save")); if (foundOpen()) placeInView(document.getElementById("found")); if (invokeOpen()) placeInView(document.getElementById("invoke")); });
+  // A find is a window over the view: "You found X!". Enter, Escape, a click or [OK] closes it.
+  let foundPanel = null;
+  function showFound(item) { const box = document.getElementById("found"); placeInView(box); foundPanel = openFound(box, item, () => { foundPanel = null; draw(); }); }
   function openSavePanel() {
     if (saveOpen()) return;
     const box = document.getElementById("save"); box.hidden = false; placeInView(box);
@@ -121,6 +131,8 @@
   }
   let busy = false;      // one step at a time: a step may wait for the server
   function act(a) {
+    if (foundOpen() || invokeOpen()) return;
+    if (a === "I") return openInvokePanel();
     if (a === "S") return openSavePanel(); if (a === "G") return where();
     if (busy) return;
     if (a === "Y" || a === "U") { busy = true; return (a === "Y" ? signHere : unsignHere)(st, api).then(s => { busy = false; st = s; draw(); }); }
@@ -128,14 +140,17 @@
     busy = true;
     forward(st, api).then(s => {
       busy = false; st = s;
+      if (st.popup) { const item = st.popup; st = { ...st, popup: undefined }; showFound(item); }
       if (st.leave) { const dir = st.leave; arriveAt(neighbour(st.cell, dir), `> You walk out ${WORD[dir]}, into the next cell.`, dir); }
       draw();
     });
   }
   document.getElementById("screen").addEventListener("click", e => { const a = e.target.closest && e.target.closest("[data-act]"); if (a) act(a.dataset.act); });
   addEventListener("keydown", e => {
+    if (invokeOpen()) { if (["Escape", "Enter", " ", "i", "I"].includes(e.key)) { e.preventDefault(); invokePanel && invokePanel.close(); } return; }
+    if (foundOpen()) { if (["Escape", "Enter", " "].includes(e.key)) { e.preventDefault(); foundPanel && foundPanel.close(); } return; }
     if (saveOpen()) { if (e.key === "Escape" && savePanel) savePanel.close(); return; }     // the SAVE panel has the keyboard
-    const k = { ArrowLeft: "L", a: "L", A: "L", ArrowRight: "R", d: "R", D: "R", ArrowUp: "W", w: "W", W: "W", l: "G", L: "G", s: "S", S: "S", y: "Y", Y: "Y", u: "U", U: "U" }[e.key];
+    const k = { ArrowLeft: "L", a: "L", A: "L", ArrowRight: "R", d: "R", D: "R", ArrowUp: "W", w: "W", W: "W", l: "G", L: "G", s: "S", S: "S", i: "I", I: "I", y: "Y", Y: "Y", u: "U", U: "U" }[e.key];
     if (k && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); act(k); }
   });
   document.getElementById("ver").textContent = VERSION;

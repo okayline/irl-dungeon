@@ -19,3 +19,9 @@ export async function getItem(env, id) {
   const row = await table(env).prepare(`SELECT ${COLS} FROM items WHERE id = ?`).bind(id).first();
   return row ? shape(row) : null;
 }
+
+// Several items by id (retired ones too), as { id: item }. One bound value however many ids, so no limit on the list.
+export async function getItems(env, ids) {
+  const { results } = await table(env).prepare(`SELECT ${COLS} FROM items WHERE id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify([...new Set(ids)])).all();
+  return Object.fromEntries(results.map((r) => [r.id, shape(r)]));
+}

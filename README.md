@@ -27,6 +27,9 @@ npx wrangler dev
 - `src/names.js`: the two-word names (dawn-baton's lists).
 - `src/travel.js`: the travel check (claims that would need impossible travel earn nothing for a while).
 - `src/saves.js`, `src/passkeys.js`: save codes and passkeys, copied from dawn-baton.
+- `src/items.js`: reads the shared item table (D1 `items-db`, bound as `ITEMS`; repo okayline/dungeon-items), read only.
+- `src/search.js`, `src/deal.js`: what each room hides each day (copied from 4Dungeon's search), and the shuffled per-room-day decks that decide who gets which item.
+- `public/found.js`, `public/invoke.js`: the "You found X!" window and the [I]NVOKE list.
 - `schema.sql`: the database tables.
 - `test/`: tests that try to break the rules (see `CLAUDE.md`).
 - `public/fonts/`: VT323 and its license (SIL Open Font License).

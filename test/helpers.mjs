@@ -28,7 +28,19 @@ export function fakeD1() {
   return { prepare: (sql) => prep(sql), batch, raw: db };
 }
 
-export const makeEnv = (extra = {}) => ({ DB: fakeD1(), ...extra });
+// A hand-made stand-in for the shared item table (okayline/dungeon-items): 12 commons (ids 1-12), 12 uncommons (13-24),
+// 12 rares (25-36), a button among the commons (id 37), and a retired common (38) that must never be dealt.
+export function fakeItems() {
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, source TEXT, source_key TEXT, rarity TEXT, name TEXT, note TEXT, alignment TEXT, nature TEXT, type TEXT, image TEXT, extra TEXT DEFAULT '{}', retired INTEGER DEFAULT 0)");
+  const ins = db.prepare("INSERT INTO items (id, source, source_key, rarity, name, note, type, image, retired) VALUES (?,?,?,?,?,?,?,?,?)");
+  ["common", "uncommon", "rare"].forEach((r, k) => { for (let i = 1; i <= 12; i++) ins.run(k * 12 + i, "4dungeon", r + i, r, `a ${r} thing ${i}`, `Note ${r} ${i}.`, null, null, 0); });
+  ins.run(37, "88x31", "5", "common", "Bodacious", null, "neon", "https://88x31.app/api/img?d=5", 0);
+  ins.run(38, "4dungeon", "gone", "common", "a retired thing", null, null, null, 1);
+  const prep = (sql, args = []) => ({ bind: (...a) => prep(sql, a), first: async () => db.prepare(sql).get(...args) ?? null, all: async () => ({ results: db.prepare(sql).all(...args) }) });
+  return { prepare: (sql) => prep(sql), raw: db };
+}
+export const makeEnv = (extra = {}) => ({ DB: fakeD1(), ITEMS: fakeItems(), ...extra });
 
 // A browser: remembers the cookie the Worker sets, and sends a (fixed) client address so rate limits can be tested.
 // Each call returns { status, data, headers }.

@@ -132,7 +132,7 @@ test("the passkey byte helpers match Node's own base64url, for every length", ()
   assert.deepEqual([...unb64("-_8")], [251, 255]);
 });
 
-test("a wall in a cell's start room is the way out to the next cell; a wall anywhere else is only a wall", () => {
+test("a wall in a cell's start room is the way out to the next cell; a wall anywhere else is searched", () => {
   let out = 0, plain = 0;
   for (const c of cells) {
     const st = start(c);
@@ -145,7 +145,7 @@ test("a wall in a cell's start room is the way out to the next cell; a wall anyw
       const room = st.floor.rooms[i]; if (!room) continue;
       for (const facing of ["N", "E", "S", "W"]) if (room.doors[facing] === undefined) {
         const r = step({ ...st, at: i, facing });
-        assert.equal(r.leave, undefined); assert.equal(r.at, i); assert.equal(r.log, "> A wall.");
+        assert.equal(r.leave, undefined); assert.equal(r.at, i); assert.equal(r.search, facing); assert.equal(r.unlock, undefined);
         assert.doesNotMatch(draw({ ...st, at: i, facing }), /the way out/); plain++;
       }
     }

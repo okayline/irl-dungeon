@@ -6,7 +6,7 @@
 // An ES module so the page and the tests share it.
 
 // The build number: bumped with every release, so the page, CHANGELOG.md and the git history always match.
-const VERSION = "v0.07";
+const VERSION = "v0.08";
 const HOME = "Pacific/Honolulu";
   const W = 80, VW = 47, VH = 17, OFF = [0, 3, 6];
   const L_ = o => 2 + o, R_ = o => 44 - o;
@@ -243,7 +243,7 @@ function renderScreen(st, now) {
   const ahead = !d ? "" : `> You face ${WORD[st.facing]}: ${d.aheadWord}.`;
   for (const m of [" " + flavor, " " + doing, " " + ahead]) S.push(r(m));
   S.push("+" + "-".repeat(78) + "+");
-  const menu = (d ? " TURN: [A] [D] OR ARROWS    WALK: [W] OR UP    " : " ") + "[L]OCATE   [S]AVE";
+  const menu = (d ? " TURN: [A] [D]    [I]NVOKE   " : " ") + "[L]OCATE   [S]AVE";
   S.push("|" + menu + " ".repeat(78 - menu.length) + "|");
   S.push("+" + "=".repeat(78) + "+");
   return finishFrame(S, st.strict);
