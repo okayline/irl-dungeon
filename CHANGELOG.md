@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.16 - Clear Skies - Oct 15 2026, 11:20 PM HST
+
+- **No more fog of war.** The map shows every room of the cell that's been built, not just the ones you've walked in. Rooms you haven't been in yet are drawn too, so you can see where you're going. (What you've walked still counts for your cleared wings and the area map.)
+
 ## v0.15 - Ring - Oct 15 2026, 11:25 PM HST
 
 - **The area map is a ring.** You're `[@]` in the middle with the six cells around you, north up. Each cell is one mark: `.` a new cell, `o` one you've stood in, `O` one whose first wing you've walked. (v0.14 drew only four cells with hallways between them; this is the picture that was asked for.)

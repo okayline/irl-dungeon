@@ -152,3 +152,10 @@ test("a wall in a cell's start room is the way out to the next cell; a wall anyw
   }
   assert.ok(out > 0 && plain > 0);
 });
+
+test("with every built room marked, the minimap draws rooms you haven't walked in (no fog of war)", () => {
+  const f = FLOOR.generate(FLOOR.seedFor("8a464b96ab2ffff", 0), undefined, { days: FLOOR.DAYS });
+  const base = { at: 0, facing: "N" }, fog = FLOOR.minimap(f, { ...base, visited: f.rooms.map((r, i) => i === 0) }), clear = FLOOR.minimap(f, { ...base, visited: f.rooms.map((r) => !!r) });
+  const rooms = (rows) => rows.join("\n").split("[").length - 1;
+  assert.ok(rooms(clear) > rooms(fog), "more rooms drawn: " + rooms(clear) + " vs " + rooms(fog));
+});
