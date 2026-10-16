@@ -182,7 +182,7 @@ const FLOOR = (() => {
 
   // Minimap: only rooms you has been in are drawn, with door stubs leading out of them.
   // A passage has no brackets; a locked door shows #; a sealed one is plain wall.
-  // state: { at: room index, visited: [bool per room], facing }
+  // state: { at: room index, visited: [bool per room], facing, came? } (came: the side of the first room you came in by, N/E/S/W)
   // The map is centered on you: her room is always in the middle and the floor moves around her.
   // Rooms two steps away up or down fall outside the 5 rows and stay off the map.
   function minimap(floor, state) {
@@ -221,10 +221,12 @@ const FLOOR = (() => {
       const mark = state.at === i ? "@" : i === floor.start ? "v" : " ";
       put(row, col, room.hall ? " " + mark + " " : "[" + mark + "]");   // a passage has no brackets: blank, or just your @ (or a mark)
       // Door marks sit in the opened gaps: an open door is just blank, # for a locked or false one; a sealed one is plain wall.
-      // The cell's first room: its walls lead out to the next cell, so the middle of each is an exit (: sideways, = up and down).
+      // The cell's first room: each wall without a door leads out to the next cell, by a hallway drawn out to the edge of the
+      // map: = going sideways, : going up or down. The hallway you came in by (state.came) ends in a * instead of the edge.
       if (i === 0) for (const d of ["N", "E", "S", "W"]) if (room.doors[d] === undefined) {
-        if (d === "E") put(row, col + 3, ":"); if (d === "W") put(row, col - 1, ":");
-        if (d === "S") put(row + 1, col + 1, "="); if (d === "N") put(row - 1, col + 1, "=");
+        const end = state.came === d ? "*" : null;
+        if (d === "E" || d === "W") { const sgn = d === "E" ? 1 : -1, x0 = d === "E" ? col + 3 : col - 1; for (let k = 0; k < 9; k++) put(row, x0 + sgn * k, "="); if (end) put(row, x0 + sgn * 8, end); }
+        else { const sgn = d === "S" ? 1 : -1; put(row + sgn, col + 1, ":"); put(row + 2 * sgn, col + 1, end || ":"); }
       }
       const stub = (d, locked) => {
         if (d === "E") put(row, col + 3, locked ? "#" : " ");

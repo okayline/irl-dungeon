@@ -2,6 +2,12 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.13 - Hallways - Oct 15 2026, 11:35 PM HST
+
+- **The way out is a hallway.** In a cell's first room, every wall that leads out to the next cell now has a hallway drawn on the map out to its edge (`=` going sideways, `:` going up or down), so walking out feels like walking down a passage and not like stepping into a corner.
+- **Arriving shows where you came from.** In the new cell, the hallway you came in by ends in a `*`.
+- Heads up: a wall leads to the neighbouring cell that lies closest to that compass direction (within about 25 degrees), and going back the way you came returns you to the same cell.
+
 ## v0.12 - Names and Gates - Oct 15 2026, 11:20 PM HST
 
 - **Rooms have names.** Under the map, in the lower left, each room shows a name drawn from 4Dungeon's lists (passages, dead ends and plain rooms each have their own), and no two rooms on a floor share one. The cell's first room is called "The way out".

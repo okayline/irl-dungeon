@@ -72,8 +72,8 @@
   const roomsKey = cell => "irl-dungeon-rooms:" + cell;
   const savedRooms = cell => { try { const l = JSON.parse(localStorage.getItem(roomsKey(cell)) || "[]"); return Array.isArray(l) ? l.filter(Number.isInteger) : []; } catch { return []; } };
   const saveRooms = s => { try { localStorage.setItem(roomsKey(s.cell), JSON.stringify(s.visited.map((v, i) => (v ? i : -1)).filter((i) => i >= 0))); } catch { /* storage blocked: the map just starts fresh each time */ } };
-  function arriveAt(cell, log = "> You arrive.", facing) {
-    st = arrive(cell, { tz, log, ...(facing ? { facing } : {}) });
+  function arriveAt(cell, log = "> You arrive.", facing, came) {
+    st = arrive(cell, { tz, log, ...(facing ? { facing } : {}), ...(came ? { came } : {}) });
     const here = st;
     load(st, api).then(s => { if (st.cell === here.cell && st.floor === here.floor) { const visited = st.visited.slice(); for (const i of savedRooms(s.cell)) if (s.floor.rooms[i]) visited[i] = true; st = { ...s, at: st.at, visited, facing: st.facing, log: s.log === here.log ? st.log : s.log }; draw(); } });
   }
@@ -100,13 +100,13 @@
   // [^] [v] inside brackets are marks, not arrows. The panel's own edges are left alone.
   function mapColor(right) {
     let out = "", k = 0;
-    const re = /[\[)][\^v][\](]|[@^v<>#:=+\-|]/g; let m;
+    const re = /[\[)][\^v][\](]|[@^v<>#:=*+\-|]/g; let m;
     while ((m = re.exec(right))) {
       out += esc(right.slice(k, m.index)); k = m.index + m[0].length;
       const at = m.index, ch = m[0];
       if (ch.length === 3) out += esc(ch);
       else if (/[+\-|]/.test(ch)) out += at === 0 || at === right.length - 1 ? ch : `<span class="wall">${ch}</span>`;
-      else out += `<span class="${ch === "#" || ch === ":" || ch === "=" ? "door" : "you"}">${esc(ch)}</span>`;
+      else out += `<span class="${ch === "#" || ch === ":" || ch === "=" || ch === "*" ? "door" : "you"}">${esc(ch)}</span>`;
     }
     return out + esc(right.slice(k));
   }
@@ -162,7 +162,7 @@
     forward(st, api).then(s => {
       busy = false; st = s;
       if (st.popup) { const item = st.popup; st = { ...st, popup: undefined }; showFound(item); }
-      if (st.leave) { const dir = st.leave; arriveAt(neighbour(st.cell, dir), `> You walk out ${WORD[dir]}, into the next cell.`, dir); }
+      if (st.leave) { const dir = st.leave; arriveAt(neighbour(st.cell, dir), `> You walk out ${WORD[dir]}, along the hallway into the next cell.`, dir, { N: "S", S: "N", E: "W", W: "E" }[dir]); }
       draw();
     });
   }

@@ -22,13 +22,18 @@ test("the name shows in the panel's bottom left, under the map", () => {
   assert.match(renderScreen(st, new Date(Date.UTC(2026, 9, 16, 12))), /\| THE WAY OUT {18}\|/);
 });
 
-test("the start room's walls without a door are marked as exits to the next cell: : on the sides, = above and below", () => {
-  const f = floor(), st = { at: 0, visited: [true], facing: "N" }, rows = FLOOR.minimap(f, st);
-  for (const d of ["N", "E", "S", "W"]) {
-    const free = f.rooms[0].doors[d] === undefined;
-    const ch = { N: rows[1][14], S: rows[3][14], E: rows[2][16], W: rows[2][12] }[d];
-    if (free && d !== "N") assert.equal(ch, d === "S" ? "=" : ":", d);
+test("the start room's walls without a door lead out by a hallway to the map's edge: = sideways, : up and down; the way you came in ends in *", () => {
+  const f = floor(), free = ["N", "E", "S", "W"].filter((d) => f.rooms[0].doors[d] === undefined);
+  assert.ok(free.length >= 1);
+  const at = (rows, r, c) => (rows[r] || "")[c] || " ";
+  for (const d of free) {
+    const rows = FLOOR.minimap(f, { at: 0, visited: [true], facing: free.find((x) => x !== d) || d });
+    if (d === "E") assert.equal(rows[2].slice(16, 25), "=========");
+    if (d === "W") assert.equal(rows[2].slice(4, 13), "=========");
+    if (d === "S") assert.deepEqual([at(rows, 3, 14), at(rows, 4, 14)], [":", ":"]);
+    if (d === "N") assert.deepEqual([at(rows, 1, 14), at(rows, 0, 14)], [":", ":"]);
+    const came = FLOOR.minimap(f, { at: 0, visited: [true], facing: free.find((x) => x !== d) || d, came: d });
+    const end = { E: at(came, 2, 24), W: at(came, 2, 4), S: at(came, 4, 14), N: at(came, 0, 14) }[d];
+    assert.equal(end, "*", "the hallway you came in by ends in * on the " + d + " side");
   }
-  const rows2 = FLOOR.minimap(f, { at: f.wings[0].rooms[1] ?? 0, visited: f.rooms.map((r, i) => i < 3), facing: "N" });
-  assert.ok(rows2.length === 5);
 });
