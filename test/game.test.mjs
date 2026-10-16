@@ -17,7 +17,7 @@ const sql = (env, q, ...a) => env.DB.raw.prepare(q).all(...a);
 async function open(me, cell = CELL, offset = -600) {
   const r = await me("/api/run", { cell, offset });
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  const floor = FLOOR.generate(FLOOR.seedFor(cell, r.data.layer), r.data.pseed, { days: r.data.days });
+  const floor = FLOOR.generate(FLOOR.seedFor(cell, r.data.layer), undefined, { days: r.data.days });
   for (const d of r.data.unlocks) FLOOR.growDoor(floor, d);
   return { ...r.data, floor };
 }
@@ -31,19 +31,15 @@ test("run: only real resolution-10 cells are accepted", async () => {
   assert.equal(sql(env, "SELECT COUNT(*) AS n FROM players")[0].n, 0, "refused cells make no player");
 });
 
-test("run: a player gets a stable private seed per cell; other players get their own", async () => {
+test("run: every player gets the same floor for a cell, and nothing about the floor is stored per player", async () => {
   const env = world(), a = browser(env), b = browser(env, { ip: "198.51.100.2" });
-  const r1 = await open(a), r2 = await open(a);
-  assert.equal(r1.pseed, r2.pseed);
-  assert.ok(Number.isInteger(r1.pseed) && r1.pseed > 0 && r1.pseed < 2 ** 32);
+  const r1 = await open(a), r2 = await open(a), other = await open(b);
   assert.deepEqual(r1.unlocks, []); assert.deepEqual(r1.completed, []); assert.equal(r1.keyReady, true);
-  const other = await open(b);
-  assert.notEqual(other.pseed, r1.pseed, "two players share a seed only by a 1 in 4 billion accident");
-  const rows = sql(env, "SELECT player_id, cell, layer, pseed FROM cell_runs ORDER BY player_id");
-  assert.equal(rows.length, 2); assert.deepEqual(rows.map((r) => r.cell), [CELL, CELL]);
-  const elsewhere = await open(a, "8a2a1072b59ffff");
-  assert.equal(sql(env, "SELECT COUNT(*) AS n FROM cell_runs WHERE player_id = ?", rows[0].player_id)[0].n, 2);
-  assert.ok(elsewhere.floor.rooms.length > 0);
+  assert.equal(r1.pseed, undefined, "no private seed is sent");
+  for (const f of [r2.floor, other.floor]) assert.deepEqual(f.rooms, r1.floor.rooms, "same rooms and same direction labels");
+  assert.equal(r1.floor.sym, other.floor.sym);
+  assert.ok(!sql(env, "SELECT name FROM sqlite_master").some((t) => t.name === "cell_runs"), "no per-player cell table");
+  assert.ok((await open(a, "8a2a1072b59ffff")).floor.rooms.length > 0);
 });
 
 test("run: keyReady needs an offset, and refuses offsets that can't exist", async () => {
@@ -92,8 +88,6 @@ test("unlock: a refused try does not use the key", async () => {
 test("unlock: needs a player who has opened that cell", async () => {
   const env = world(), me = browser(env), stranger = browser(env, { ip: "198.51.100.9" });
   assert.equal((await unlock(me, 3)).status, 401);
-  await open(stranger, "8a2a1072b59ffff");
-  assert.equal((await unlock(stranger, 3)).status, 404, "a run in another cell doesn't count");
   assert.equal((await unlock(stranger, 3, -600, "not a cell")).status, 400);
 });
 
@@ -256,7 +250,7 @@ test("walk: rooms of a wing that hasn't been unlocked can't be claimed", async (
   const env = world(), me = browser(env), r = await open(me);
   const rooms = wingRooms(r.floor, 0), [door] = FLOOR.lockedDoors(r.floor);
   assert.equal((await walk(me, [...rooms, door])).status, 400, "the room behind a locked door isn't built");
-  const built = FLOOR.generate(FLOOR.seedFor(CELL, 0), r.pseed, { days: r.days }); FLOOR.growDoor(built, door);
+  const built = FLOOR.generate(FLOOR.seedFor(CELL, 0), undefined, { days: r.days }); FLOOR.growDoor(built, door);
   assert.equal((await walk(me, [...rooms, ...wingRooms(built, 1)])).status, 400, "not unlocked by this player, even though the wing exists");
   assert.equal(sql(env, "SELECT COUNT(*) AS n FROM ledger")[0].n, 0);
 });

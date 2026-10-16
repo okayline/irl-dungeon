@@ -46,7 +46,7 @@ const FLOOR = (() => {
   }
 
   // opts.days is how many days this floor lasts (3 to 7): days - 1 wings hang two locked doors, the next wing hangs one.
-  function generate(seed = Math.floor(Math.random() * 2 ** 32), pseed = Math.floor(Math.random() * 2 ** 32), opts = {}) {
+  function generate(seed = Math.floor(Math.random() * 2 ** 32), pseed = seed, opts = {}) {
     const prand = rng(pseed);
     const days = Math.max(3, Math.min(DAYS, opts.days || DAYS)), pairs = days - 1;
     const floor = { v: 1, seed, pseed, days, pairs, rooms: [], start: 0, stairs: -1,

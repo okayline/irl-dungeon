@@ -79,17 +79,6 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 -- THE GAME'S OWN STATE (v0.03). Ordinary tables, only read by the player they belong to; what needs proving to other
 -- people goes on the ledger instead.
 
--- A player's private seed for one cell and layer. The server needs it to rebuild their floor (door labels and the map
--- are rotated by it) and check their moves. Layer is 0 until seasons exist.
-CREATE TABLE IF NOT EXISTS cell_runs (
-  player_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-  cell        TEXT NOT NULL,
-  layer       INTEGER NOT NULL DEFAULT 0,
-  pseed       INTEGER NOT NULL,
-  created_at  INTEGER NOT NULL,
-  PRIMARY KEY (player_id, cell, layer)
-);
-
 -- Each door a player has unlocked, in order. door is the exit's room number. day is the player's local day (days since
 -- 1970): UNIQUE (player_id, day) is the one-key-a-day rule. tz_check says whether the claimed UTC offset matched the
 -- time zone Cloudflare infers from the IP (match, mismatch, unknown): a soft signal, never a reason to refuse.

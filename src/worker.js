@@ -210,19 +210,13 @@ async function logout(ctx) {
 
 const need = (ok, msg, status = 400) => { if (!ok) throw new Oops(msg, status); };
 
-// The cell and the player's run in it. Creates the player (rate limited) and their private seed on first sight.
+// The cell and the player's progress in it. Every player sees the same floor (the shape and the direction labels
+// both come from the cell), so nothing private is stored per cell. Creates the player (rate limited) on first sight.
 async function theRun(ctx, b, create) {
   need(isCell(b.cell), "That isn't a cell.");
   const me = create ? await player(ctx, true) : await must(ctx);
-  let row = await ctx.db.prepare("SELECT pseed FROM cell_runs WHERE player_id = ? AND cell = ? AND layer = ?").bind(me.id, b.cell, LAYER).first();
-  if (!row) {
-    need(create, "Open the cell first.", 404);
-    const pseed = crypto.getRandomValues(new Uint32Array(1))[0] || 1;
-    await ctx.db.prepare("INSERT OR IGNORE INTO cell_runs (player_id, cell, layer, pseed, created_at) VALUES (?,?,?,?,?)").bind(me.id, b.cell, LAYER, pseed, sec(ctx.t)).run();
-    row = await ctx.db.prepare("SELECT pseed FROM cell_runs WHERE player_id = ? AND cell = ? AND layer = ?").bind(me.id, b.cell, LAYER).first();
-  }
   const doors = (await ctx.db.prepare("SELECT door FROM unlocks WHERE player_id = ? AND cell = ? AND layer = ? ORDER BY id").bind(me.id, b.cell, LAYER).all()).results.map((r) => r.door);
-  return { me, pseed: row.pseed, doors, floor: buildFloor(b.cell, row.pseed, doors) };
+  return { me, doors, floor: buildFloor(b.cell, doors) };
 }
 
 const lastKeyDay = async (ctx, me) => (await ctx.db.prepare("SELECT MAX(day) AS d FROM unlocks WHERE player_id = ?").bind(me.id).first()).d;
@@ -234,7 +228,7 @@ async function run(ctx) {
   const last = await lastKeyDay(ctx, r.me);
   // keyReady is only worked out when the page says what time zone offset it is on
   const keyReady = b.offset === undefined ? null : dayOf(ctx, b.offset, last) > (last ?? -Infinity);
-  return { layer: LAYER, days: FLOOR.DAYS, pseed: r.pseed, unlocks: r.doors, completed, keyReady };
+  return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed, keyReady };
 }
 
 async function unlock(ctx) {

@@ -58,18 +58,9 @@
   // ?cell=<id> still works, to look at any cell without being there. The server only ever sees cell ids.
   const fromAddress = (new URLSearchParams(location.search).get("cell") || "").toLowerCase();
 
-  // The private seed (map rotation) belongs to this browser. It is kept so the map doesn't spin between visits.
-  function privateSeed() {
-    try {
-      let v = Number(localStorage.getItem("irl-pseed"));
-      if (!Number.isInteger(v) || v <= 0) { v = (crypto.getRandomValues(new Uint32Array(1))[0] || 1); localStorage.setItem("irl-pseed", String(v)); }
-      return v >>> 0;
-    } catch { return crypto.getRandomValues(new Uint32Array(1))[0] >>> 0; }
-  }
-
   let st = { tz, log: "" };
   function arriveAt(cell) {
-    const floor = FLOOR.generate(FLOOR.seedFor(cell, 0), privateSeed(), { days: FLOOR.DAYS });
+    const floor = FLOOR.generate(FLOOR.seedFor(cell, 0), undefined, { days: FLOOR.DAYS });
     st = { tz, cell, floor, ...FLOOR.arrive(floor), log: "> You arrive." };
   }
   if (isCell(fromAddress)) arriveAt(fromAddress);

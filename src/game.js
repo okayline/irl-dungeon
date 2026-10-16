@@ -7,8 +7,8 @@ export const LAYER = 0;                      // seasons don't exist yet: everyth
 
 // The player's floor for a cell: the shared shape (from the cell and layer), the player's private seed, and the doors
 // they have unlocked, replayed in order. Throws if a stored door can't be opened (the stored history is broken).
-export function buildFloor(cell, pseed, doors, layer = LAYER) {
-  const floor = FLOOR.generate(FLOOR.seedFor(cell, layer), pseed, { days: FLOOR.DAYS });
+export function buildFloor(cell, doors, layer = LAYER) {
+  const floor = FLOOR.generate(FLOOR.seedFor(cell, layer), undefined, { days: FLOOR.DAYS });
   for (const door of doors) if (FLOOR.growDoor(floor, door) === undefined) throw new Error(`stored door ${door} can't be replayed`);
   return floor;
 }
