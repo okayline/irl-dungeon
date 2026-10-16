@@ -8,6 +8,6 @@
 - **Database changes** need a file in `migrations/`, `schema.sql` updated to match, and the live database migrated *before* the push that needs it.
 - **No new dependencies** without asking. The only outside code is `public/vendor/h3-js.es.js` (Apache-2.0, copied in with the owner's OK; see `public/vendor/README.txt`). Don't edit it.
 - **`src/saves.js` and `src/passkeys.js` are copies** from dawn-baton (which got them from scoundrel.exe and the 88x31 cLuB). Keep them identical apart from names, and put a fix in every repo that has them.
-- Times in changelogs are Hawaii time (HST). The changelog starts with the first release.
+- Times in changelogs are Hawaii time (HST). The changelog starts with the first release. Every release bumps `VERSION` in `public/screen.js` and adds a `CHANGELOG.md` entry (a test checks they match).
 - **`public/floor.js` is trimmed from** `daily-dungeon/floor.js` (43cebc2): the wing and door code is unchanged, but room contents and screen drawing are removed (rooms are empty for now). A fix to the wing or door code goes in both repos.
 - **`public/screen.js` is trimmed from** `daily-dungeon/screen.js` (43cebc2): the frame, header, 3D view and width check are 4Dungeon's code; the panels and menu are this game's. Every line on screen must show something real (no filler stats), and every menu item must work.

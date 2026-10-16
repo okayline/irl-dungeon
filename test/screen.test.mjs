@@ -2,7 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import FLOOR from "../public/floor.js";
-import { renderScreen } from "../public/screen.js";
+import { renderScreen, VERSION } from "../public/screen.js";
+import { readFileSync } from "node:fs";
 import { turn, step } from "../public/walk.js";
 
 const NOW = new Date("2026-10-16T03:40:00Z");
@@ -107,4 +108,12 @@ test("two players on the same cell see the same shape, rotated or mirrored: same
     assert.equal(sig(1), sig(99999));
     assert.equal(sig(1), sig(424242));
   }
+});
+
+test("the build number is on the page and is the newest entry in CHANGELOG.md", () => {
+  assert.match(VERSION, /^v\d+\.\d+$/);
+  const newest = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8").match(/^## (v\d+\.\d+)\b/m)[1];
+  assert.equal(VERSION, newest);
+  const page = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+  assert.ok(page.includes('id="ver"') && page.includes("VERSION"), "the page must show the build number");
 });

@@ -24,14 +24,16 @@
   .kanji { display: inline-block; width: 2ch; text-align: center; overflow: visible; white-space: nowrap; }
   .kanji .g { font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "MS Gothic", sans-serif; line-height: 0; font-size: 0.8em; }
   .cell { display: inline-block; width: 1ch; text-align: center; overflow: visible; white-space: nowrap; }
+  /* The build number, small, under the screen's lower right corner (as in 4Dungeon). */
+  .ver { text-align: right; font-size: 12px; line-height: 14px; color: var(--trail); padding: 2px 1ch 0 0; letter-spacing: 0.05em; }
   .cell .g { font-family: "DejaVu Sans Mono", Menlo, Consolas, "Segoe UI Symbol", monospace; line-height: 0; }
 </style>
 </head>
 <body>
-  <div class="frame"><pre id="screen">LOADING...</pre></div>
+  <div class="frame"><pre id="screen">LOADING...</pre><div id="ver" class="ver"></div></div>
 <script type="module">
   import FLOOR from "./floor.js";
-  import { renderScreen } from "./screen.js";
+  import { renderScreen, VERSION } from "./screen.js";
   import { turn, step } from "./walk.js";
   import { isCell, locate } from "./place.js";
 
@@ -96,6 +98,7 @@
     const k = { ArrowLeft: "L", a: "L", A: "L", ArrowRight: "R", d: "R", D: "R", ArrowUp: "W", w: "W", W: "W", l: "G", L: "G" }[e.key];
     if (k && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); act(k); }
   });
+  document.getElementById("ver").textContent = VERSION;
   draw();
   setInterval(draw, 30000);   // the header clock
 </script>
