@@ -37,7 +37,7 @@ Status: **v0.03** (players, save codes, passkeys, the chained ledger, `public/fl
 **The ledger.**
 - Everything that matters is sealed on one SHA-256 hash chain, append-only.
 - The **first finder** is the first player to walk a whole wing, credited in the ledger forever (anonymous: no name or id in the entry).
-- **Names and signing.** A name is two words from lists (dawn-baton's, in `src/names.js`), unique, rerollable in SAVE. A player has none until they sign a find: after a first find the game offers "Press Y to sign it" (also `[Y] SIGN IT` in the right panel while standing in that wing). Signing is sealed on the ledger as a `sign` entry (cell, layer, wing; never the name); the name is looked up when shown, so a reroll renames past signatures. The right panel shows `FIRST: <NAME>`, `FIRST: UNSIGNED` or `FIRST: YOU [Y] SIGN IT` for the wing you're in.
+- **Names and signing.** A name is two words from lists (dawn-baton's, in `src/names.js`), unique, rerollable in SAVE, and a signed find can be unsigned. A player has none until they sign a find: after a first find the game offers "Press Y to sign it" (also `[Y] SIGN IT` in the right panel while standing in that wing). Signing is sealed on the ledger as a `sign` entry (cell, layer, wing; never the name); the name is looked up when shown, so a reroll renames past signatures. The right panel shows `FIRST: <NAME>`, `FIRST: UNSIGNED` or `FIRST: YOU [Y] SIGN IT` for the wing you're in.
 - **Saved cells** (up to 20) are kept on the server with the player, so they follow a save code to other devices; listed in SAVE with GO and FORGET. Private, never published. GO is subject to the travel check like any arrival.
 - The public ledger never shows who (ids stay in their own column) and never an exact time, only a date.
 
@@ -54,7 +54,7 @@ Status: **v0.03** (players, save codes, passkeys, the chained ledger, `public/fl
 4. **Which way do layers go in the fiction?** 4Dungeon climbs up out of a pit; strata under a place sound like digging down.
 5. **Anchoring the head.** A chain can't show that its newest entries were dropped. Publish the head hash somewhere outside the database (see `src/ledger.js`).
 6. **Real-world safety.** A game that rewards visiting places can send people onto roads or private land. It needs a line in the game and in the about page.
-7. **Signing.** Decided: optional, offered after each first find. The SAVE panel says a name is "shown on finds you sign, with their cell". Still open: a signed name plus its cells is a trail of places a person has been; whether to say that more plainly, and whether to let a player unsign.
+7. **Signing.** Decided: optional, offered after each first find. The SAVE panel says a name is "shown on finds you sign, with their cell". A player can unsign any find they signed (`[U] UNSIGN` in the right panel while in that wing), sealed as an `unsign` entry; their name is kept for next time. Still open: a signed name plus its cells is a trail of places a person has been; whether to say that more plainly. The word lists are dawn-baton's for now (this game is lighter).
 
 ## `public/floor.js` (trimmed from 4Dungeon)
 

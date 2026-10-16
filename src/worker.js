@@ -14,7 +14,8 @@
 //   POST /api/run {cell, offset?}     open a cell: the doors you've unlocked, the wings you've finished, whether today's key is
 //                                     ready, and whether the cell earns credit (the travel check, src/travel.js)
 //   POST /api/unlock {cell, door, offset}   spend today's key on a locked door (one a day, by your local day)
-//   POST /api/sign {cell, wing}       sign a wing you found first with your name (makes your name if you have none)
+//   POST /api/sign {cell, wing, unsign?}   sign a wing you found first with your name (makes your name if you have
+//                                     none), or with unsign: true take your name off it again
 //   POST /api/name {action: "reroll"} a new two-word name (only once you have one)
 //   POST /api/cells {action: "save" | "forget", cell}   your saved cells (up to 20, listed in /api/account)
 //   POST /api/walk {cell, visited}    the rooms you've stood in; any wing this completes is recorded, and its first finder sealed
@@ -253,8 +254,9 @@ async function run(ctx) {
   // who found this cell's wings first: a name only where the finder signed (never an id)
   const firsts = (await db.prepare("SELECT f.wing_key, f.signed, p.name_a, p.name_b FROM wing_firsts f JOIN players p ON p.id = f.player_id WHERE f.cell = ? AND f.layer = ?").bind(b.cell, LAYER).all()).results
     .map((x) => ({ wing: x.wing_key, name: x.signed ? nameText(x.name_a, x.name_b) : null }));
-  const mineUnsigned = (await db.prepare("SELECT wing_key FROM wing_firsts WHERE cell = ? AND layer = ? AND player_id = ? AND signed = 0").bind(b.cell, LAYER, r.me.id).all()).results.map((x) => x.wing_key);
-  return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed, keyReady, firsts, unsigned: mineUnsigned, credit: r.travel.ok, ...(r.travel.ok ? {} : { waitSec: r.travel.waitSec }) };
+  const mine = (await db.prepare("SELECT wing_key, signed FROM wing_firsts WHERE cell = ? AND layer = ? AND player_id = ?").bind(b.cell, LAYER, r.me.id).all()).results;
+  const mineUnsigned = mine.filter((x) => !x.signed).map((x) => x.wing_key), mineSigned = mine.filter((x) => x.signed).map((x) => x.wing_key);
+  return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed, keyReady, firsts, unsigned: mineUnsigned, signed: mineSigned, credit: r.travel.ok, ...(r.travel.ok ? {} : { waitSec: r.travel.waitSec }) };
 }
 
 async function unlock(ctx) {
@@ -341,12 +343,13 @@ async function sign(ctx) {
   const me = await must(ctx);
   const row = await db.prepare("SELECT player_id, signed FROM wing_firsts WHERE cell = ? AND layer = ? AND wing_key = ?").bind(b.cell, LAYER, b.wing).first();
   need(row && row.player_id === me.id, "Only the first to walk a wing can sign it.", 403);
-  const name = await ensureName(ctx, me);
-  if (row.signed) return { ok: true, name };
+  const off = b.unsign === true, want = off ? 0 : 1;
+  const name = off ? null : await ensureName(ctx, me);
+  if (row.signed === want) return { ok: true, name };
   const t = sec(ctx.t), record = JSON.stringify({ cell: b.cell, layer: LAYER, wing: b.wing });
   for (let i = 0; i < 8; i++) {
-    const stmts = [db.prepare("UPDATE wing_firsts SET signed = 1 WHERE cell = ? AND layer = ? AND wing_key = ? AND signed = 0").bind(b.cell, LAYER, b.wing),
-      ...(await chainInserts(db, await head(db), [{ kind: "sign", record, playerId: me.id, t }]))];
+    const stmts = [db.prepare("UPDATE wing_firsts SET signed = ? WHERE cell = ? AND layer = ? AND wing_key = ? AND signed = ?").bind(want, b.cell, LAYER, b.wing, 1 - want),
+      ...(await chainInserts(db, await head(db), [{ kind: off ? "unsign" : "sign", record, playerId: me.id, t }]))];
     try { await db.batch(stmts); return { ok: true, name }; }
     catch (e) { if (chainClash(e)) continue; throw e; }
   }

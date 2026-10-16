@@ -33,7 +33,7 @@ export async function load(st, api, offset = offsetNow()) {
   // wings already walked count as reported, so they aren't sent again
   const reported = floor.wings.map((w, i) => (r.completed.includes(wingKeyOf(floor, r.unlocks, i)) ? i : -1)).filter((i) => i >= 0);
   const firsts = Object.fromEntries((r.firsts || []).map((x) => [x.wing, x.name]));
-  const out = { ...st, loaded: true, keyReady: r.keyReady, doors: r.unlocks.slice(), reported, credit: r.credit, firsts, unsigned: (r.unsigned || []).slice() };
+  const out = { ...st, loaded: true, keyReady: r.keyReady, doors: r.unlocks.slice(), reported, credit: r.credit, firsts, unsigned: (r.unsigned || []).slice(), signed: (r.signed || []).slice() };
   if (r.credit === false) out.log = `> You got here fast. This cell earns nothing for ${waitText(r.waitSec)}.`;
   return out;
 }
@@ -84,6 +84,7 @@ export function wingHere(st) {
 export function firstLine(st) {
   const k = wingHere(st);
   if (k === null || !st.firsts || !(k in st.firsts)) return "";
+  if ((st.signed || []).includes(k)) return " FIRST: YOU   [U] UNSIGN";
   if (st.firsts[k]) return " FIRST: " + st.firsts[k].toUpperCase();
   return (st.unsigned || []).includes(k) ? " FIRST: YOU   [Y] SIGN IT" : " FIRST: UNSIGNED";
 }
@@ -95,5 +96,14 @@ export async function signHere(st, api) {
   if (k === null || !(st.unsigned || []).includes(k)) return st;
   const r = await ask(api, "sign", { cell: st.cell, wing: k });
   if (r.error) return { ...st, log: "> " + r.error };
-  return { ...st, firsts: { ...st.firsts, [k]: r.name }, unsigned: st.unsigned.filter((x) => x !== k), log: `> Signed. This wing was found first by ${r.name}.` };
+  return { ...st, firsts: { ...st.firsts, [k]: r.name }, unsigned: st.unsigned.filter((x) => x !== k), signed: [...(st.signed || []), k], log: `> Signed. This wing was found first by ${r.name}.` };
+}
+
+// Take your name off the wing you're standing in, if you signed it.
+export async function unsignHere(st, api) {
+  const k = wingHere(st);
+  if (k === null || !(st.signed || []).includes(k)) return st;
+  const r = await ask(api, "sign", { cell: st.cell, wing: k, unsign: true });
+  if (r.error) return { ...st, log: "> " + r.error };
+  return { ...st, firsts: { ...st.firsts, [k]: null }, signed: st.signed.filter((x) => x !== k), unsigned: [...(st.unsigned || []), k], log: "> Unsigned. Your name is off this wing." };
 }

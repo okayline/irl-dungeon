@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import FLOOR from "../public/floor.js";
-import { arrive, load, forward, firstLine, signHere } from "../public/play.js";
+import { arrive, load, forward, firstLine, signHere, unsignHere } from "../public/play.js";
 import { freeName, nameText } from "../src/names.js";
 import { makeEnv, browser, fakeD1 } from "./helpers.mjs";
 
@@ -68,7 +68,7 @@ test("a first find is unsigned until the finder signs it; signing makes their na
   const p = sql(env, "SELECT name_a, name_b FROM players WHERE name_a IS NOT NULL")[0];
   const name = nameText(p.name_a, p.name_b);
   assert.ok(name); assert.equal(st.log, `> Signed. This wing was found first by ${name}.`);
-  assert.equal(firstLine(st), " FIRST: " + name.toUpperCase());
+  assert.equal(firstLine(st), " FIRST: YOU   [U] UNSIGN", "your own signed find offers unsigning");
   assert.deepEqual(sql(env, "SELECT signed FROM wing_firsts").map((r) => r.signed), [1]);
   const sig = sql(env, "SELECT * FROM ledger WHERE kind = 'sign'");
   assert.equal(sig.length, 1);
@@ -174,4 +174,29 @@ test("the page offers signing only in a wing you found first, and doesn't ask th
   calls.length = 0;
   const after = await signHere(st, api);
   assert.deepEqual(calls, []); assert.equal(after, st);
+});
+
+test("the finder can unsign: the name comes off for everyone, sealed as 'unsign', and they can sign again", async () => {
+  const env = world(), { me, api } = client(env);
+  let st = await walkFirstWing(api); st = await signHere(st, api);
+  st = await unsignHere(st, api);
+  assert.equal(st.log, "> Unsigned. Your name is off this wing.");
+  assert.equal(firstLine(st), " FIRST: YOU   [Y] SIGN IT");
+  assert.deepEqual(sql(env, "SELECT signed FROM wing_firsts").map((r) => r.signed), [0]);
+  assert.deepEqual(sql(env, "SELECT kind FROM ledger ORDER BY id").map((r) => r.kind), ["wing", "sign", "unsign"]);
+  assert.deepEqual(JSON.parse(sql(env, "SELECT record FROM ledger WHERE kind = 'unsign'")[0].record), { cell: CELL, layer: 0, wing: "0" });
+  const other = client(env, { ip: "198.51.100.4" });
+  assert.equal(firstLine(await goTo(await load(arrive(CELL), other.api, -600), 0, other.api)), " FIRST: UNSIGNED");
+  assert.equal((await me("/api/account")).data.name !== null, true, "the name itself is kept, for next time");
+  // unsigning again changes nothing; someone else can't unsign it
+  assert.equal((await me("/api/sign", { cell: CELL, wing: "0", unsign: true })).status, 200);
+  assert.equal(sql(env, "SELECT COUNT(*) AS n FROM ledger WHERE kind = 'unsign'")[0].n, 1);
+  await me("/api/sign", { cell: CELL, wing: "0" });
+  await walkFirstWing(other.api);
+  assert.equal((await other.me("/api/sign", { cell: CELL, wing: "0", unsign: true })).status, 403);
+  assert.deepEqual(sql(env, "SELECT signed FROM wing_firsts").map((r) => r.signed), [1]);
+  // and unsign only works in a wing you signed: no request otherwise
+  const calls = []; const spy = async (p, x) => { calls.push(p); return other.api(p, x); };
+  const s2 = await goTo(await load(arrive(CELL), other.api, -600), 0, other.api);
+  assert.equal(await unsignHere(s2, spy), s2); assert.deepEqual(calls, []);
 });
