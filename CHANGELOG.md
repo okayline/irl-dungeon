@@ -2,6 +2,12 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.04 - Street Door - Oct 15 2026, 07:08 PM HST
+
+- **No location prompt needed.** The game starts you in a cell near you, guessed roughly from your connection. Your browser's location (press L) is now optional.
+- **Walk to the next cell.** In a cell's first room, walk into a wall to step out into the next cell that way. That's how you get from the rough guess to your own street.
+- Behind the scenes: jumping impossibly far, impossibly fast still lets you look around, but earns nothing there until enough time has passed.
+
 ## v0.03 - Shared Halls - Oct 15 2026, 06:42 PM HST
 
 - **Everyone sees the same dungeon** in a cell, with the same map and the same directions.
