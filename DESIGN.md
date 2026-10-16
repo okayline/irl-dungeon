@@ -2,7 +2,7 @@
 
 4Dungeon in the real world. Every place on Earth is a cell; every cell is a dungeon that grows over time. 4Dungeon is the core game and the model: when this document is silent, do what 4Dungeon does.
 
-Status: **foundation only** (players, save codes, passkeys, the chained ledger). No game yet.
+Status: **foundation plus 4Dungeon's floor generator** (players, save codes, passkeys, the chained ledger, `src/floor.js`). No game yet.
 
 ## Settled
 
@@ -24,7 +24,8 @@ Status: **foundation only** (players, save codes, passkeys, the chained ledger).
 
 **Days and seasons.**
 - A cell offers a fresh wing every day.
-- A season is a moon quarter, the same clock as 4Dungeon.
+- How long a season is: **not known yet.** 4Dungeon's moon quarter (about 7.4 days) is a working assumption only.
+- A cell's season layer is a 4Dungeon **floor** (`src/floor.js`); each day's wing is a wing of that floor. Keep a layer/depth index in every key so depth can be added later without a migration.
 - When a season ends, its layer is **kept, never deleted**: it stays readable and walkable and its ledger entries stay. New layers build on old ones.
 - Growth: layers spread **horizontally** (more wings, more spaces) for several seasons first, and only then start going **down**. Don't go down too quickly.
 
@@ -39,8 +40,8 @@ Status: **foundation only** (players, save codes, passkeys, the chained ledger).
 
 ## Open questions
 
-1. **How many seasons does a cell spread sideways before the first layer below?**
-2. **What is "today" for the key?** UTC day (simple, same for everyone) or the player's local day (like 4Dungeon's rollover). The server can't know a player's time zone.
+1. **How many seasons does a cell spread sideways before the first layer below?** Decided for now: build sideways only, keep room to go down later.
+2. **What is "today" for the key?** UTC day (same instant for everyone; in Hawaii it flips at 2pm) or the player's local day (like 4Dungeon). The server can't know a time zone. Leaning local day with a guard: the claimed day must be within one of the UTC day and never earlier than the player's last key.
 3. **Location can't be proven.** A browser can claim any cell. The stakes are cosmetic, so the defense is rate limits, not detection. Decide what, exactly, a claim can earn.
 4. **What does "first finder" attach to:** the cell, the layer, the day's wing, or a door?
 5. **Which way do layers go in the fiction?** 4Dungeon climbs up out of a pit; strata under a place sound like digging down.
@@ -48,6 +49,15 @@ Status: **foundation only** (players, save codes, passkeys, the chained ledger).
 7. **Real-world safety.** A game that rewards visiting places can send people onto roads or private land. It needs a line in the game and in the about page.
 8. **Signing.** Signing a find ties a consistent name to a trail of cells. The old version offered it; decide whether to keep it, and how to say what it reveals.
 9. **Hosting address.** A custom domain like the other games, or workers.dev for now.
+
+## `src/floor.js` (copied from 4Dungeon)
+
+Identical to `daily-dungeon/floor.js` (43cebc2) except the module wrapper. `test/floor.test.mjs` checks 4Dungeon's rules from outside. Findings:
+- A walk builds days+1 wings, not four as its header says.
+- Wings are 3 spaces; about 0.03% are a 1-space fallback.
+- `floor.stuck` is reachable: about 1 in 700 greedy walks on 6 to 7 day floors (the header says never in practice). Worth fixing in 4Dungeon too.
+- It still carries demons, items, silver, clues, room kinds, bonus and void rooms and a heat map. None is wired up here. **Open: what do rooms hold?** Trim or keep unused?
+- The server can only check an unlock if it knows the shared seed and the player's private `pseed`/`sym` (door directions are rotated per player).
 
 ## Recoverable from the old version
 

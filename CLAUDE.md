@@ -9,3 +9,4 @@
 - **No new dependencies** without asking. There are none today.
 - **`src/saves.js` and `src/passkeys.js` are copies** from dawn-baton (which got them from scoundrel.exe and the 88x31 cLuB). Keep them identical apart from names, and put a fix in every repo that has them.
 - Times in changelogs are Hawaii time (HST). The changelog starts with the first release.
+- **`src/floor.js` is a copy** of `daily-dungeon/floor.js`, identical apart from the module wrapper. Put a fix in both repos.

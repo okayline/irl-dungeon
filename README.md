@@ -7,7 +7,7 @@
 ## Run it
 
 ```
-npm test                  # 58 tests (Node 22+, built-in SQLite standing in for D1)
+npm test                  # 66 tests (Node 22+, built-in SQLite standing in for D1)
 npx wrangler d1 create irl-dungeon-db     # paste the id into wrangler.jsonc
 npx wrangler d1 execute irl-dungeon-db --local --file=schema.sql
 npx wrangler dev
@@ -17,6 +17,7 @@ npx wrangler dev
 
 - `src/ledger.js`: the hash chain (`seal`, `verifyChain`).
 - `src/worker.js`: the API, and serves `public/`.
+- `src/floor.js`: 4Dungeon's floor generator (copy).
 - `src/saves.js`, `src/passkeys.js`: save codes and passkeys, copied from dawn-baton.
 - `schema.sql`: the database tables.
 - `test/`: tests that try to break the rules (see `CLAUDE.md`).
