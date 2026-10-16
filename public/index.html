@@ -18,6 +18,7 @@
   .you { color: var(--bright); text-shadow: 0 0 6px var(--bright); }
   .moon { color: var(--moon); }
   .door { color: var(--trail); }
+  .wall { color: var(--dim); opacity: 0.6; }   /* the outline of the rooms you've been in: 4Dungeon's */
   .btn { cursor: pointer; color: var(--bright); }
   .btn:hover { background: var(--fg); color: var(--bg); }
   /* The weekday kanji takes exactly two character cells, so the frame stays straight. */
@@ -66,10 +67,15 @@
 
   let st = { tz, log: "" };
   // Arriving builds the cell's floor at once, then asks the server for this player's doors in it (src/worker.js).
+  // The rooms you've walked in each cell are remembered on this device, so coming back to a cell shows its outline again
+  // (and a cell you've never been in shows only its first room).
+  const roomsKey = cell => "irl-dungeon-rooms:" + cell;
+  const savedRooms = cell => { try { const l = JSON.parse(localStorage.getItem(roomsKey(cell)) || "[]"); return Array.isArray(l) ? l.filter(Number.isInteger) : []; } catch { return []; } };
+  const saveRooms = s => { try { localStorage.setItem(roomsKey(s.cell), JSON.stringify(s.visited.map((v, i) => (v ? i : -1)).filter((i) => i >= 0))); } catch { /* storage blocked: the map just starts fresh each time */ } };
   function arriveAt(cell, log = "> You arrive.", facing) {
     st = arrive(cell, { tz, log, ...(facing ? { facing } : {}) });
     const here = st;
-    load(st, api).then(s => { if (st.cell === here.cell && st.floor === here.floor) { st = { ...s, at: st.at, visited: st.visited, facing: st.facing, log: s.log === here.log ? st.log : s.log }; draw(); } });
+    load(st, api).then(s => { if (st.cell === here.cell && st.floor === here.floor) { const visited = st.visited.slice(); for (const i of savedRooms(s.cell)) if (s.floor.rooms[i]) visited[i] = true; st = { ...s, at: st.at, visited, facing: st.facing, log: s.log === here.log ? st.log : s.log }; draw(); } });
   }
   if (isCell(fromAddress)) arriveAt(fromAddress);
   else fetch("/api/here").then(r => r.json()).then(d => {
@@ -90,13 +96,27 @@
   // straight whatever font the browser falls back to for it.
   const boxed = html => html.replace(/[\u3040-\u30ff\u4e00-\u9fff]/g, c => `<span class="kanji"><span class="g">${c}</span></span>`)
     .replace(/[^\x00-\x7f]/g, c => `<span class="cell${/[░▓█]/.test(c) ? " moon" : ""}"><span class="g">${c}</span></span>`);
+  // The minimap rows, colored as 4Dungeon does: the outline (+ - |) dim, your @ and facing arrow bright, a locked # grey.
+  // [^] [v] inside brackets are marks, not arrows. The panel's own edges are left alone.
+  function mapColor(right) {
+    let out = "", k = 0;
+    const re = /[\[)][\^v][\](]|[@^v<>#+\-|]/g; let m;
+    while ((m = re.exec(right))) {
+      out += esc(right.slice(k, m.index)); k = m.index + m[0].length;
+      const at = m.index, ch = m[0];
+      if (ch.length === 3) out += esc(ch);
+      else if (/[+\-|]/.test(ch)) out += at === 0 || at === right.length - 1 ? ch : `<span class="wall">${ch}</span>`;
+      else out += `<span class="${ch === "#" ? "door" : "you"}">${esc(ch)}</span>`;
+    }
+    return out + esc(right.slice(k));
+  }
   function colorize(text) {
     return text.split("\n").map((line, i) => {
       if (i >= 1 && i <= 4) return boxed(i === 2 ? esc(line).replace(/[()O]+/g, m => `<span class="moon">${m}</span>`) : esc(line));
       if (i >= 6 && i <= 22) {
         const l = line.slice(0, 49), r = line.slice(49);
         const L = esc(l).replace("[ &lt; ]", '<span class="btn" data-act="L">[ &lt; ]</span>').replace("[ &gt; ]", '<span class="btn" data-act="R">[ &gt; ]</span>').replace("[  ^  ]", '<span class="btn" data-act="W">[  ^  ]</span>');
-        const R = esc(r).replace("[Y] SIGN IT", '<span class="btn" data-act="Y">[Y] SIGN IT</span>').replace("[U] UNSIGN", '<span class="btn" data-act="U">[U] UNSIGN</span>').replace("@", '<span class="you">@</span>').replace(/#/g, '<span class="door">#</span>');
+        const R = (i - 6 >= 9 && i - 6 <= 13 ? mapColor(r) : esc(r)).replace("[Y] SIGN IT", '<span class="btn" data-act="Y">[Y] SIGN IT</span>').replace("[U] UNSIGN", '<span class="btn" data-act="U">[U] UNSIGN</span>');
         return L + R;
       }
       if (i === 28) return boxed(esc(line)).replace("[I]NVOKE", '<span class="btn" data-act="I">[I]NVOKE</span>').replace("[L]OCATE", '<span class="btn" data-act="G">[L]OCATE</span>').replace("[S]AVE", '<span class="btn" data-act="S">[S]AVE</span>');
@@ -106,6 +126,7 @@
 
   function draw() {
     if (st.floor) { st.map = FLOOR.minimap(st.floor, st); st.first = firstLine(st); }
+    if (st.floor && st.loaded) saveRooms(st);
     document.getElementById("screen").innerHTML = colorize(renderScreen(st, new Date()));
   }
   let savePanel = null;

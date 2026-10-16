@@ -2,6 +2,11 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.11 - Outlines - Oct 15 2026, 11:10 PM HST
+
+- **The map outlines where you've been.** The rooms you've walked in are outlined in the map's dim grey, as in 4Dungeon, and your @ and the way you face stay bright.
+- **Cells remember your steps.** Walk into a cell you've been in before and the rooms you walked there are already outlined, so a cell you know no longer looks like a brand-new one. (Remembered on this device only.)
+
 ## v0.10 - Fuller Walls - Oct 15 2026, 10:55 PM HST
 
 - **Walls hide more, and give it up faster.** Every wall without a door now hides 0 to 3 things (before, a room hid one thing behind one wall). The first thing on a wall takes 3 to 6 searches; each one after it takes half again as many. You can find things on every wall of a room, every day.
