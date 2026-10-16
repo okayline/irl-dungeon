@@ -4,6 +4,8 @@
 
 **Status: foundation plus a first screen.** The page shows a cell's floor (empty rooms) on 4Dungeon's screen with its minimap, and you can turn and walk through open doors. Unlocking, the day's key and the ledger entries for it aren't built yet. What exists underneath is cookie players, save codes, passkeys, and a chained, tamper-evident ledger. See `DESIGN.md` for what is settled and what is open.
 
+Live at **https://irl.88x31.app** (a custom domain on the `irl-dungeon` Worker).
+
 ## Run it
 
 ```

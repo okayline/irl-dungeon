@@ -36,6 +36,7 @@ Status: **foundation plus a first screen** (players, save codes, passkeys, the c
 
 **No accounts.**
 - A player is a cookie, with save codes and passkeys to come back. Only hashes are stored.
+- The address is **`irl.88x31.app`** (a custom domain on the Worker). Passkeys belong to this address.
 - The page is served by the same Worker as the API (one origin, no CORS). This replaces the old arrangement (GitHub Pages plus a separate Worker with bearer tokens). Same as scoundrel.exe and dawn-baton.
 
 ## Open questions
@@ -48,7 +49,6 @@ Status: **foundation plus a first screen** (players, save codes, passkeys, the c
 6. **Anchoring the head.** A chain can't show that its newest entries were dropped. Publish the head hash somewhere outside the database (see `src/ledger.js`).
 7. **Real-world safety.** A game that rewards visiting places can send people onto roads or private land. It needs a line in the game and in the about page.
 8. **Signing.** Signing a find ties a consistent name to a trail of cells. The old version offered it; decide whether to keep it, and how to say what it reveals.
-9. **Hosting address.** Live at `irl-dungeon.ddddungeon.workers.dev`. Custom domain `irl.88x31.app` added in Cloudflare on 2026-10-15 (HST). Passkeys belong to one address, so pick the one to use before anyone registers a passkey.
 
 ## `public/floor.js` (trimmed from 4Dungeon)
 
