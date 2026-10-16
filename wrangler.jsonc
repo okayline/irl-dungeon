@@ -7,6 +7,8 @@
   "assets": { "directory": "public", "run_worker_first": ["/api/*"] },
   "d1_databases": [
     // created with the Cloudflare tools on 2026-10-15 (HST), region OC.
-    { "binding": "DB", "database_name": "irl-dungeon-db", "database_id": "9728ba1a-49a9-4ebb-8a2e-af1146508a59" }
+    { "binding": "DB", "database_name": "irl-dungeon-db", "database_id": "9728ba1a-49a9-4ebb-8a2e-af1146508a59" },
+    // the shared item table (repo okayline/dungeon-items), read only from here: see src/items.js
+    { "binding": "ITEMS", "database_name": "items-db", "database_id": "b39d9b77-fb44-4474-82b2-60252578f38a" }
   ]
 }
