@@ -2,6 +2,11 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.02 - Way Back - Oct 15 2026, 06:14 PM HST
+
+- **A [S]AVE button.** It opens a panel inside the 3D view where you can make a save code (shown once, with a download-as-text-file button) and add a passkey, so you can get your player back on any device.
+- **Log in on a new device** with a save code or a passkey, and log out once you have a way back in.
+
 ## v0.01 - First Steps - Oct 15 2026, 05:58 PM HST
 
 The first release.
