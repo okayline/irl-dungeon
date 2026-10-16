@@ -2,7 +2,7 @@
 
 Times are Hawaii time (HST). Newest first.
 
-## v0.05.1 - Second Thoughts - Oct 15 2026, 07:47 PM HST
+## v0.06 - Second Thoughts - Oct 15 2026, 07:47 PM HST
 
 - **Rerolling your name asks first.** Tap REROLL, then YES, REROLL to change it, or KEEP IT to keep it. A name you roll past can't come back.
 - **No more black bar in [S]AVE.** Messages now show at the top, under the title, instead of covering the list.
