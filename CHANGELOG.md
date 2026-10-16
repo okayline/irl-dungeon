@@ -2,6 +2,11 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.09 - Numbered - Oct 15 2026, 10:35 PM HST
+
+- **Every find is a numbered copy, and the numbers are shared with the other games.** The number now comes from one registry used by all the games, so "#4" of an item is the fourth copy anywhere, not just here.
+- A number can arrive a moment late. If the registry can't be reached, you still keep what you found and it shows without a number; it gets one the next time you open [I]NVOKE or search that room.
+
 ## v0.08 - Hidden Things - Oct 15 2026, 09:10 PM HST
 
 - **Search the walls.** In any room except a cell's first, press into a wall (up) to search it. Most walls hold nothing. Some rooms hide something behind one wall, and it takes 5 to 10 searches to turn it up. Once you have a few searches in, a faint noise can tell you you're close.

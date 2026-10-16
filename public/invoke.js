@@ -2,7 +2,7 @@
 // over the 3D view. Nothing can be used yet, so it is only a list.
 export function invokeLines(finds) {
   if (!finds.length) return ["Nothing yet.", "Press into a wall to search it."];
-  return finds.map((f) => `${f.item.name}   ${f.item.rarity.toUpperCase()}${f.item.type ? " " + f.item.type.toUpperCase() : ""}  #${f.copy}`);
+  return finds.map((f) => `${f.item.name}   ${f.item.rarity.toUpperCase()}${f.item.type ? " " + f.item.type.toUpperCase() : ""}${f.copy ? "  #" + f.copy : ""}`);
 }
 export function openInvoke(root, { fetchApi, onClose = () => {} }) {
   const pre = root.querySelector("pre");

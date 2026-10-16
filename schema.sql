@@ -166,7 +166,9 @@ CREATE TABLE IF NOT EXISTS search_prog (
 );
 -- An item found: one per player per room per day. item_id is the id in the shared item table (okayline/dungeon-items).
 -- deck_pos is the place in that room-day's shuffled deck (src/deal.js), unique, so no two players get the same kind
--- until the deck is used up; copy is which copy of that item this is (1, 2, 3...), unique per item.
+-- until the deck is used up; copy is which copy of that item this is (1, 2, 3...), unique per item. The number comes from
+-- the shared registry (migrations/006): a find is saved first and numbered a moment later, so copy may be empty until
+-- then. Empty values never clash, so any number of finds can be waiting.
 CREATE TABLE IF NOT EXISTS finds (
   id          INTEGER PRIMARY KEY,
   player_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -177,7 +179,7 @@ CREATE TABLE IF NOT EXISTS finds (
   rarity      TEXT NOT NULL,
   deck_pos    INTEGER NOT NULL,
   item_id     INTEGER NOT NULL,
-  copy        INTEGER NOT NULL,
+  copy        INTEGER,
   created_at  INTEGER NOT NULL,
   UNIQUE (player_id, cell, layer, spot, day),
   UNIQUE (cell, layer, spot, day, deck_pos),

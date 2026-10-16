@@ -175,3 +175,80 @@ test("the database itself refuses a second find per player-room-day, a repeated 
   assert.throws(() => ins(2, "0:3", 1, 1, 1), /UNIQUE/);          // same copy of the same item
   ins(2, "0:3", 1, 1, 2);                                          // the next copy is fine
 });
+
+// ---- numbering by the shared registry (src/copies.js) ----
+// finish one find for a player: search the right wall until found
+async function oneFind(env, ip = "198.51.100.50") {
+  const p = await player(env, ip);
+  const r = await untilFound(p, hid(NOON).wall);
+  return { p, r };
+}
+
+test("a find is numbered by the registry, keyed by the find's own row id, with no cell or day sent", async () => {
+  const env = world(), { r } = await oneFind(env);
+  const row = sql(env, "SELECT * FROM finds")[0];
+  assert.equal(env.REGISTRY.calls, 1);
+  assert.deepEqual(env.REGISTRY.log[0], { itemId: row.item_id, game: "irl-dungeon", playerId: row.player_id, key: "irl-find:" + row.id });
+  assert.equal(row.copy, 1); assert.equal(r.last.item.copy, 1);
+});
+
+test("numbers are shared with other games: copies already born elsewhere come first", async () => {
+  const env = world();
+  for (let id = 1; id <= 37; id++) for (let k = 0; k < 3; k++) await env.REGISTRY.birth({ itemId: id, game: "4dungeon", playerId: 1, key: `x${id}-${k}` });
+  const { r } = await oneFind(env);
+  assert.equal(r.last.item.copy, 4); assert.equal(sql(env, "SELECT copy FROM finds")[0].copy, 4);
+});
+
+test("registry down: the find is saved unnumbered and the player is still told the item", async () => {
+  const env = world(); env.REGISTRY.down = true;
+  const { r } = await oneFind(env);
+  assert.equal(r.last.result, "found"); assert.ok(r.last.item.name); assert.equal(r.last.item.copy, null);
+  assert.equal(sql(env, "SELECT copy FROM finds")[0].copy, null);
+});
+
+test("a waiting find is numbered the next time finds are listed, and no second copy is minted", async () => {
+  const env = world(), { p } = await oneFind(env);
+  const first = sql(env, "SELECT copy FROM finds")[0].copy, total = env.REGISTRY.total();
+  env.DB.raw.exec("UPDATE finds SET copy = NULL");
+  const l = (await p.me("/api/finds")).data;
+  assert.equal(l.finds[0].copy, first); assert.equal(env.REGISTRY.total(), total);
+  assert.equal(sql(env, "SELECT copy FROM finds")[0].copy, first);
+});
+
+test("a waiting find is numbered when the room is searched again (already found today)", async () => {
+  const env = world(); env.REGISTRY.down = true;
+  const { p } = await oneFind(env);
+  env.REGISTRY.down = false;
+  assert.equal((await p.search(hid(NOON).wall)).data.result, "done");
+  assert.equal(sql(env, "SELECT copy FROM finds")[0].copy, 1);
+});
+
+test("a registry that refuses, or is not bound at all, leaves finds unnumbered without failing", async () => {
+  const a = world(); a.REGISTRY.refuse = true; await oneFind(a);
+  assert.equal(sql(a, "SELECT copy FROM finds")[0].copy, null);
+  const b = world(); delete b.REGISTRY; const { r } = await oneFind(b);
+  assert.equal(r.last.result, "found"); assert.equal(sql(b, "SELECT copy FROM finds")[0].copy, null);
+});
+
+test("players finding at once get distinct (item, copy) pairs", async () => {
+  const env = world(), ps = [];
+  for (let i = 0; i < 4; i++) ps.push(await player(env, "198.51.100." + (60 + i)));
+  await Promise.all(ps.map((p) => untilFound(p, hid(NOON).wall)));
+  const rows = sql(env, "SELECT item_id, copy FROM finds");
+  assert.equal(rows.length, 4); assert.ok(rows.every((r) => Number.isInteger(r.copy)));
+  assert.equal(new Set(rows.map((r) => r.item_id + ":" + r.copy)).size, 4);
+});
+
+test("test mode never calls the registry", async () => {
+  const env = world(); const p = await player(env, "198.51.100.70");
+  env.DB.raw.exec("UPDATE players SET admin = 1, test_mode = 1");
+  const r = await p.search(hid(NOON).wall);
+  assert.equal(env.REGISTRY.calls, 0); assert.ok(r.data.result);
+});
+
+test("the database lets many finds wait for a number but never repeats a number", () => {
+  const env = world(); env.DB.raw.exec("INSERT INTO players (id, token_hash, created_at, seen_at) VALUES (1, 'a', 1, 1)");
+  const ins = (spot, pos, copy) => env.DB.raw.prepare("INSERT INTO finds (player_id, cell, layer, spot, day, rarity, deck_pos, item_id, copy, created_at) VALUES (1, 'c', 0, ?, 5, 'common', ?, 1, ?, 1)").run(spot, pos, copy);
+  ins("0:1", 0, null); ins("0:2", 0, null);
+  ins("0:3", 0, 7); assert.throws(() => ins("0:4", 0, 7), /UNIQUE/);
+});

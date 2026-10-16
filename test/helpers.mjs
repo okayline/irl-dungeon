@@ -40,7 +40,27 @@ export function fakeItems() {
   const prep = (sql, args = []) => ({ bind: (...a) => prep(sql, a), first: async () => db.prepare(sql).get(...args) ?? null, all: async () => ({ results: db.prepare(sql).all(...args) }) });
   return { prepare: (sql) => prep(sql), raw: db };
 }
-export const makeEnv = (extra = {}) => ({ DB: fakeD1(), ITEMS: fakeItems(), ...extra });
+// A stand-in for the copy registry (the Registry entrypoint of dungeon-items): one counter per item shared by every game,
+// births idempotent by game + key. `down` makes calls throw, `refuse` makes it answer { error }. `calls` counts birth calls.
+export function fakeRegistry() {
+  const born = new Map(), counts = new Map();
+  const reg = {
+    calls: 0, down: false, refuse: false, log: [],
+    async birth(a) {
+      reg.calls++; reg.log.push(a);
+      if (reg.down) throw new Error("registry unreachable");
+      if (reg.refuse) return { error: "refused" };
+      const k = `${a.game}|${a.key}`;
+      if (born.has(k)) return { ...born.get(k), created: false };
+      const copy = (counts.get(a.itemId) || 0) + 1; counts.set(a.itemId, copy);
+      const r = { itemId: a.itemId, copy }; born.set(k, r);
+      return { ...r, created: true };
+    },
+    total: () => born.size,                                     // copies ever made
+  };
+  return reg;
+}
+export const makeEnv = (extra = {}) => ({ DB: fakeD1(), ITEMS: fakeItems(), REGISTRY: fakeRegistry(), ...extra });
 
 // A browser: remembers the cookie the Worker sets, and sends a (fixed) client address so rate limits can be tested.
 // Each call returns { status, data, headers }.

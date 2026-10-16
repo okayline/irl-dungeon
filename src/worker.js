@@ -31,6 +31,7 @@ import { LAYER, buildFloor, wingKey, finishedWings } from "./game.js";
 import { localDay, dayFor, offsetCheck, BadOffset, dayText } from "./day.js";
 import { listItems, getItems } from "./items.js";
 import { deckKey, dealt } from "./deal.js";
+import { numberFind, numberPending } from "./copies.js";
 import { hides, WALLS, NEAR_AFTER, NEAR_CHANCE } from "./search.js";
 import { MAX_CODES, newSaveCode, hashCode, newSession, newToken, rateLimit } from "./saves.js";
 import { registerOptions, verifyRegistration, loginOptions, verifyLogin } from "./passkeys.js";
@@ -320,7 +321,7 @@ async function search(ctx) {
   if (!pool.length) return { result: "miss" };
   const showItem = (it, copy) => ({ id: it.id, name: it.name, rarity: it.rarity, note: it.note, type: it.type, image: it.image, copy });
   if (r.test) return { result: "found", item: showItem(pool.find((i) => i.id === dealt(pool, deckKey(b.cell, spot, day, hid.rarity), 0)), null), test: true };
-  if (await db.prepare("SELECT 1 AS x FROM finds WHERE player_id = ? AND cell = ? AND layer = ? AND spot = ? AND day = ?").bind(r.me.id, b.cell, LAYER, spot, day).first()) return { result: "done" };
+  if (await db.prepare("SELECT 1 AS x FROM finds WHERE player_id = ? AND cell = ? AND layer = ? AND spot = ? AND day = ?").bind(r.me.id, b.cell, LAYER, spot, day).first()) { await numberPending(env, db, r.me.id); return { result: "done" }; }
   const got = await db.prepare("INSERT INTO search_prog (player_id, cell, layer, spot, day, searches) VALUES (?,?,?,?,?,1) ON CONFLICT (player_id, cell, layer, spot, day) DO UPDATE SET searches = searches + 1 RETURNING searches")
     .bind(r.me.id, b.cell, LAYER, spot, day).first();
   if (got.searches < hid.need) return { result: "miss", noise: got.searches >= NEAR_AFTER && Math.random() < NEAR_CHANCE };
@@ -328,14 +329,14 @@ async function search(ctx) {
   for (let tries = 0; tries < 8; tries++) {
     const pos = (await db.prepare("SELECT COUNT(*) AS n FROM finds WHERE cell = ? AND layer = ? AND spot = ? AND day = ?").bind(b.cell, LAYER, spot, day).first()).n;
     const item = pool.find((i) => i.id === dealt(pool, key, pos));
-    const copy = (await db.prepare("SELECT COUNT(*) AS n FROM finds WHERE item_id = ?").bind(item.id).first()).n + 1;
-    try {
-      await db.prepare("INSERT INTO finds (player_id, cell, layer, spot, day, rarity, deck_pos, item_id, copy, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
-        .bind(r.me.id, b.cell, LAYER, spot, day, hid.rarity, pos, item.id, copy, sec(ctx.t)).run();
+    try {                                                                            // saved first, numbered by the registry a moment later (src/copies.js)
+      const row = await db.prepare("INSERT INTO finds (player_id, cell, layer, spot, day, rarity, deck_pos, item_id, created_at) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id")
+        .bind(r.me.id, b.cell, LAYER, spot, day, hid.rarity, pos, item.id, sec(ctx.t)).first();
+      const copy = await numberFind(env, db, { id: row.id, player_id: r.me.id, item_id: item.id });
       return { result: "found", item: showItem(item, copy) };
     } catch (e) {
       if (!isUnique(e)) throw e;
-      if (await db.prepare("SELECT 1 AS x FROM finds WHERE player_id = ? AND cell = ? AND layer = ? AND spot = ? AND day = ?").bind(r.me.id, b.cell, LAYER, spot, day).first()) return { result: "done" };
+      if (await db.prepare("SELECT 1 AS x FROM finds WHERE player_id = ? AND cell = ? AND layer = ? AND spot = ? AND day = ?").bind(r.me.id, b.cell, LAYER, spot, day).first()) { await numberPending(env, db, r.me.id); return { result: "done" }; }
     }                                                                                // someone else took that place or copy a moment ago: try the next
   }
   throw new Oops("Something got in the way. Search again.", 409);
@@ -344,6 +345,7 @@ async function search(ctx) {
 // GET /api/finds: what this player has found, newest first (the INVOKE screen). Item details come from the shared table.
 async function finds(ctx) {
   const me = await must(ctx);
+  await numberPending(ctx.env, ctx.db, me.id);                                      // finds the registry couldn't number yet
   const rows = (await ctx.db.prepare("SELECT id, day, copy, item_id FROM finds WHERE player_id = ? ORDER BY id DESC LIMIT 200").bind(me.id).all()).results;
   const items = rows.length ? await getItems(ctx.env, rows.map((r) => r.item_id)) : {};
   return { finds: rows.map((r) => ({ id: r.id, day: dayText(r.day), copy: r.copy, item: items[r.item_id] ? { name: items[r.item_id].name, rarity: items[r.item_id].rarity, type: items[r.item_id].type, note: items[r.item_id].note, image: items[r.item_id].image } : { name: "an item that has gone missing", rarity: "common", type: null, note: null, image: null } })) };

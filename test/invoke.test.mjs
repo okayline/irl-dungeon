@@ -22,6 +22,9 @@ test("INVOKE lists finds with rarity, type and copy number; with none it says ho
   assert.deepEqual(invokeLines([{ copy: 3, item: { name: "a spent battery", rarity: "common", type: null } }, { copy: 1, item: { name: "Bodacious", rarity: "common", type: "neon" } }]),
     ["a spent battery   COMMON  #3", "Bodacious   COMMON NEON  #1"]);
 });
+test("a find still waiting for its number lists without one (never '#null')", () => {
+  assert.deepEqual(invokeLines([{ copy: null, item: { name: "a spent battery", rarity: "common", type: null } }]), ["a spent battery   COMMON"]);
+});
 test("the find window says You found <name>! with rarity, copy and note", () => {
   assert.deepEqual(foundLines({ name: "a spent battery", rarity: "common", copy: 2, note: "Still faintly warm." }), ["You found a spent battery!", "", "COMMON   COPY #2", "", "Still faintly warm."]);
   assert.deepEqual(foundLines({ name: "Bodacious", rarity: "uncommon", type: "neon", copy: null, note: null }), ["You found Bodacious!", "", "UNCOMMON NEON"]);
