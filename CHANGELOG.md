@@ -2,6 +2,11 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.12 - Names and Gates - Oct 15 2026, 11:20 PM HST
+
+- **Rooms have names.** Under the map, in the lower left, each room shows a name drawn from 4Dungeon's lists (passages, dead ends and plain rooms each have their own), and no two rooms on a floor share one. The cell's first room is called "The way out".
+- **The way out is marked on the map.** In a cell's first room, each wall that leads out to the next cell is marked with its own symbol (`:` on the sides, `=` above and below) in the door grey.
+
 ## v0.11 - Outlines - Oct 15 2026, 11:10 PM HST
 
 - **The map outlines where you've been.** The rooms you've walked in are outlined in the map's dim grey, as in 4Dungeon, and your @ and the way you face stay bright.

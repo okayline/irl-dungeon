@@ -5,8 +5,10 @@
 // screen shows something real; nothing is filler.
 // An ES module so the page and the tests share it.
 
+import { roomName } from "./roomnames.js";
+
 // The build number: bumped with every release, so the page, CHANGELOG.md and the git history always match.
-const VERSION = "v0.11";
+const VERSION = "v0.12";
 const HOME = "Pacific/Honolulu";
   const W = 80, VW = 47, VH = 17, OFF = [0, 3, 6];
   const L_ = o => 2 + o, R_ = o => 44 - o;
@@ -231,7 +233,7 @@ function renderScreen(st, now) {
     " " + (st.cell || "NONE").slice(0, PW - 2),
     d ? ` WING ${d.room.wing + 1}   ${here}` : "",
     d ? ` ${f.wings.length} WING${f.wings.length === 1 ? "" : "S"} BUILT` : "",
-    d ? (st.first || "") : "", rule, "", mapHead, ...map, "", rule, d ? ` ROOM ${st.at + 1}` : "",
+    d ? (st.first || "") : "", rule, "", mapHead, ...map, "", rule, d ? " " + roomName(f, st.at).toUpperCase() : "",
   ];
   for (let i = 0; i < 17; i++) S.push("|" + ljust(view[i], 47) + "|" + ljust(stat[i] || "", 30) + "|");
   S.push("+" + "=".repeat(78) + "+");

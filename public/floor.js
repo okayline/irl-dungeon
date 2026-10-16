@@ -221,6 +221,11 @@ const FLOOR = (() => {
       const mark = state.at === i ? "@" : i === floor.start ? "v" : " ";
       put(row, col, room.hall ? " " + mark + " " : "[" + mark + "]");   // a passage has no brackets: blank, or just your @ (or a mark)
       // Door marks sit in the opened gaps: an open door is just blank, # for a locked or false one; a sealed one is plain wall.
+      // The cell's first room: its walls lead out to the next cell, so the middle of each is an exit (: sideways, = up and down).
+      if (i === 0) for (const d of ["N", "E", "S", "W"]) if (room.doors[d] === undefined) {
+        if (d === "E") put(row, col + 3, ":"); if (d === "W") put(row, col - 1, ":");
+        if (d === "S") put(row + 1, col + 1, "="); if (d === "N") put(row - 1, col + 1, "=");
+      }
       const stub = (d, locked) => {
         if (d === "E") put(row, col + 3, locked ? "#" : " ");
         if (d === "W") put(row, col - 1, locked ? "#" : " ");
