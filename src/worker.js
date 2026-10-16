@@ -1,5 +1,5 @@
 // irl-dungeon Worker: cookie players, the ways back in (save codes and passkeys), and the public ledger.
-// The game's own routes arrive with the game. The Worker also serves the page (public/), so the page and the API
+// The Worker also serves the page (public/), so the page and the API
 // share one origin: no CORS, a plain cookie, and passkeys that belong to one address.
 //
 // API (all JSON; every POST must send content-type: application/json):
@@ -10,7 +10,7 @@
 //   POST /api/logout                  this browser forgets its player (needs a save code or passkey first)
 //   GET  /api/ledger?before=&limit=   newest first: id, kind, record, prev_hash, hash, date (never who, never the time)
 //   GET  /api/verify                  checks the whole chain and returns its head (keep a copy: see ledger.js)
-//   POST /api/run {cell, offset?}     open a cell: your private seed, the doors you've unlocked, the wings you've finished
+//   POST /api/run {cell, offset?}     open a cell: the doors you've unlocked, the wings you've finished, whether today's key is ready
 //   POST /api/unlock {cell, door, offset}   spend today's key on a locked door (one a day, by your local day)
 //   POST /api/walk {cell, visited}    the rooms you've stood in; any wing this completes is recorded, and its first finder sealed
 

@@ -2,7 +2,7 @@
 
 4Dungeon in the real world. Every place on Earth is a cell; every cell is a dungeon that grows over time. 4Dungeon is the core game and the model: when this document is silent, do what 4Dungeon does.
 
-Status: **foundation plus a first screen** (players, save codes, passkeys, the chained ledger, `public/floor.js`, and the page: 4Dungeon's screen and minimap on an empty-rooms floor; turn and walk only).
+Status: **v0.03** (players, save codes, passkeys, the chained ledger, `public/floor.js`, and the page: 4Dungeon's screen and minimap on an empty-rooms floor, turn and walk only; on the server, the day's key, unlocking a door and first finders of a wing, which the page doesn't use yet).
 
 ## Settled
 
@@ -17,9 +17,9 @@ Status: **foundation plus a first screen** (players, save codes, passkeys, the c
 - A long walk gives you more places to choose from, not more doors opened. Which cell to spend the day's key in is the daily decision.
 - No breath, no demons, no combat.
 
-**Personal, not shared.**
+**The key is personal; the floor is shared.**
 - The key and the door choice belong to the player. They make the choice.
-- Shape is shared and contents are private, as in 4Dungeon.
+- Everyone sees the same floor in a cell: the same shape, map and directions (since v0.03; 4Dungeon's private seed and per-player rotation were dropped). Which doors a player has unlocked is their own.
 - Community doors (a choice that changes a cell for everyone) are much later, if ever.
 
 **Days and seasons.**
@@ -31,7 +31,7 @@ Status: **foundation plus a first screen** (players, save codes, passkeys, the c
 
 **The ledger.**
 - Everything that matters is sealed on one SHA-256 hash chain, append-only.
-- The **first finder** of a cell, a layer or a door is credited in it forever.
+- The **first finder** is the first player to walk a whole wing, credited in the ledger forever (anonymous: no name or id in the entry).
 - The public ledger never shows who (ids stay in their own column) and never an exact time, only a date.
 
 **No accounts.**
@@ -44,11 +44,10 @@ Status: **foundation plus a first screen** (players, save codes, passkeys, the c
 1. **How many seasons does a cell spread sideways before the first layer below?** Decided for now: build sideways only, keep room to go down later.
 2. **Checking the time zone.** Decided: the key's day is the player's **local day** (`src/day.js`). The browser sends only its UTC offset; the server applies it to its own clock, rejects offsets outside UTC-12:00 to UTC+14:00, and never lets a player's day go backwards. So the most a lie can buy is a key a few hours early or late. Still open: cross-check the claimed offset against the time zone Cloudflare infers from the player's IP (`request.cf.timezone`, free, no table), as a soft signal only (VPNs and phones on roaming make it wrong sometimes), and/or a cell-based zone lookup (a precise table is tens of MB).
 3. **Location can't be proven.** A browser can claim any cell. The stakes are cosmetic, so the defense is rate limits, not detection. Decide what, exactly, a claim can earn.
-4. **What does "first finder" attach to:** the cell, the layer, the day's wing, or a door?
-5. **Which way do layers go in the fiction?** 4Dungeon climbs up out of a pit; strata under a place sound like digging down.
-6. **Anchoring the head.** A chain can't show that its newest entries were dropped. Publish the head hash somewhere outside the database (see `src/ledger.js`).
-7. **Real-world safety.** A game that rewards visiting places can send people onto roads or private land. It needs a line in the game and in the about page.
-8. **Signing.** Signing a find ties a consistent name to a trail of cells. The old version offered it; decide whether to keep it, and how to say what it reveals.
+4. **Which way do layers go in the fiction?** 4Dungeon climbs up out of a pit; strata under a place sound like digging down.
+5. **Anchoring the head.** A chain can't show that its newest entries were dropped. Publish the head hash somewhere outside the database (see `src/ledger.js`).
+6. **Real-world safety.** A game that rewards visiting places can send people onto roads or private land. It needs a line in the game and in the about page.
+7. **Signing.** Signing a find ties a consistent name to a trail of cells. The old version offered it; decide whether to keep it, and how to say what it reveals.
 
 ## `public/floor.js` (trimmed from 4Dungeon)
 
@@ -57,7 +56,7 @@ Trimmed from `daily-dungeon/floor.js` (43cebc2): wing layout and door/sealing co
 - Wings are 3 spaces; about 0.03% are a 1-space fallback.
 - `floor.stuck` is reachable: about 1 in 700 greedy walks on 6 to 7 day floors (the header says never in practice). Worth fixing in 4Dungeon too.
 - **Open: what do rooms hold?** Empty for now.
-- The server can only check an unlock if it knows the shared seed and the player's private `pseed`/`sym` (door directions are rotated per player).
+- The server checks an unlock by rebuilding the floor from the cell's shared seed and the player's unlocked doors (`src/game.js`). Since v0.03 the private seed is the shared seed, so `sym` is the same for everyone.
 
 ## The screen
 

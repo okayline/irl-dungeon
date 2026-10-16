@@ -5,7 +5,7 @@ import FLOOR from "../public/floor.js";
 
 export const LAYER = 0;                      // seasons don't exist yet: everything is on layer 0
 
-// The player's floor for a cell: the shared shape (from the cell and layer), the player's private seed, and the doors
+// The player's floor for a cell: the shared floor (from the cell and layer; there is no private seed since v0.03) and the doors
 // they have unlocked, replayed in order. Throws if a stored door can't be opened (the stored history is broken).
 export function buildFloor(cell, doors, layer = LAYER) {
   const floor = FLOOR.generate(FLOOR.seedFor(cell, layer), undefined, { days: FLOOR.DAYS });

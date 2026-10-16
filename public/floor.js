@@ -8,8 +8,8 @@
 // wing, and a wing is built the moment its door is unlocked, so nothing past the next doors exists yet.
 // The last wing holds the stairs down (in its passage or dead end). Everything is rolled from the floor's seed.
 //
-// Two seeds: `seed` (shared) decides the SHAPE; `pseed` (private, per player) decides only `sym`, the per-player
-// rotation/mirror of the map, so door labels differ from player to player while the shape is the same.
+// Two seeds: `seed` decides the SHAPE; `pseed` decides only `sym`, the rotation/mirror of the map. In 4Dungeon pseed
+// is private per player; here it defaults to the shared seed (v0.03), so everyone sees the same map and directions.
 const FLOOR = (() => {
   const DIRS = { N: [-1, 0], E: [0, 1], S: [1, 0], W: [0, -1] };
   const OPP = { N: "S", E: "W", S: "N", W: "E" };
