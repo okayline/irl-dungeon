@@ -7,7 +7,7 @@
 ## Run it
 
 ```
-npm test                  # 97 tests (Node 22+, built-in SQLite standing in for D1)
+npm test                  # 123 tests (Node 22+, built-in SQLite standing in for D1)
 npx wrangler d1 create irl-dungeon-db     # paste the id into wrangler.jsonc
 npx wrangler d1 execute irl-dungeon-db --local --file=schema.sql
 npx wrangler dev

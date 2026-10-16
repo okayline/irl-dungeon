@@ -2,6 +2,11 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.03 - Shared Halls - Oct 15 2026, 06:42 PM HST
+
+- **Everyone sees the same dungeon** in a cell, with the same map and the same directions.
+- Behind the scenes: the server now handles the daily key, unlocking a door, and recording the first person to walk a whole wing (anonymous for now). The page doesn't use these yet.
+
 ## v0.02 - Way Back - Oct 15 2026, 06:14 PM HST
 
 - **A [S]AVE button.** It opens a panel inside the 3D view where you can make a save code (shown once, with a download-as-text-file button) and add a passkey, so you can get your player back on any device.
