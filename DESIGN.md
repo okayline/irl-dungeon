@@ -81,6 +81,7 @@ Written Oct 15 2026 (HST) from a design conversation with the owner. Rooms are e
 - This brings back 4Dungeon's "**shape is shared, contents are private**": the dungeon is the same for everyone; what you find is yours.
 - **Rarities** (4Dungeon's): COMMON, UNCOMMON, RARE and MOON now. **MYTHIC** ("old-layer relics") is kept for when layers exist.
 - 4Dungeon's items are mostly small, odd ruined-city objects with a one-line note ("a subway token. For a line that was never built."). Its pools: 12 common, 12 uncommon, 12 rare, 6 mythic, 4 moon. Items with game effects there (medicine that heals the party, a candle that calms the room) are used here as name and note only: no party, no heat.
+- **A wall hides 0 to 3 things** (v0.10), each with its own rarity, found in order; the first needs 3 to 6 searches and each later one costs half again more (4Dungeon's "a wall tires"). A player's searches on a wall are a running total (`search_prog`), so no find has to reset anything. Decks are per room-day per rarity.
 - **Copy numbers come from the shared registry** (v0.09): a find is saved first, then numbered by the registry in okayline/dungeon-items, so numbers are shared across all games. A find the registry couldn't number waits and is numbered later (`src/copies.js`).
 - **The ledger holds scarce things only** (a first find, or a one-of-a-kind item if those ever exist). Sealing every pickup would bloat it and queue every write on one chain. Ordinary finds live in the player's own record.
 

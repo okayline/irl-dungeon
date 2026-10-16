@@ -300,9 +300,10 @@ async function unlock(ctx) {
 }
 
 // Pressing into a wall searches it (rules in src/search.js). What the room hides today is the same for everyone; each
-// player's work on it is theirs. When the searches on the right wall reach what it needs, the player finds an item,
-// dealt from that room-day's shuffled deck of one rarity (src/deal.js) out of the shared item table (src/items.js).
-// Answers { result: "miss", noise? }, { result: "done" } (already found today), or { result: "found", item }.
+// player's work on it is theirs. A wall hides 0 to 3 things in order; this player's searches on it add up, and each time
+// the total reaches what the next thing needs, they find it, dealt from that room-day's shuffled deck of its rarity
+// (src/deal.js) out of the shared item table (src/items.js).
+// Answers { result: "miss", noise? }, { result: "done" } (everything on that wall is found), or { result: "found", item }.
 async function search(ctx) {
   const b = await body(ctx), { db, env, req } = ctx;
   if (!(await rateLimit(env, req, "search", 1200, 3600))) throw new Oops("Too many tries. Try again later.", 429);
@@ -315,29 +316,38 @@ async function search(ctx) {
   if (!r.test) needCredit(r);
   const last = r.test ? null : (await db.prepare("SELECT MAX(day) AS d FROM finds WHERE player_id = ?").bind(r.me.id).first()).d;
   const day = dayOf(ctx, b.offset, last), spot = `${wingKey(r.doors, room.wing)}:${b.room}`;
-  const hid = hides(room, `${b.cell}|${spot}|${day}`);
-  if (!hid || hid.wall !== b.dir) return { result: "miss" };                         // a bare wall never answers
-  const pool = await listItems(env, { rarity: hid.rarity });
-  if (!pool.length) return { result: "miss" };
+  const things = hides(room, `${b.cell}|${spot}|${day}`)[b.dir] || [];
+  if (!things.length) return { result: "miss" };                                      // a bare wall never answers
   const showItem = (it, copy) => ({ id: it.id, name: it.name, rarity: it.rarity, note: it.note, type: it.type, image: it.image, copy });
-  if (r.test) return { result: "found", item: showItem(pool.find((i) => i.id === dealt(pool, deckKey(b.cell, spot, day, hid.rarity), 0)), null), test: true };
-  if (await db.prepare("SELECT 1 AS x FROM finds WHERE player_id = ? AND cell = ? AND layer = ? AND spot = ? AND day = ?").bind(r.me.id, b.cell, LAYER, spot, day).first()) { await numberPending(env, db, r.me.id); return { result: "done" }; }
-  const got = await db.prepare("INSERT INTO search_prog (player_id, cell, layer, spot, day, searches) VALUES (?,?,?,?,?,1) ON CONFLICT (player_id, cell, layer, spot, day) DO UPDATE SET searches = searches + 1 RETURNING searches")
-    .bind(r.me.id, b.cell, LAYER, spot, day).first();
-  if (got.searches < hid.need) return { result: "miss", noise: got.searches >= NEAR_AFTER && Math.random() < NEAR_CHANCE };
-  const key = deckKey(b.cell, spot, day, hid.rarity);
+  const poolFor = async (rarity) => listItems(env, { rarity });
+  if (r.test) {                                                                       // the sandbox: the first thing on the wall, nothing saved
+    const pool = await poolFor(things[0].rarity);
+    return pool.length ? { result: "found", item: showItem(pool.find((i) => i.id === dealt(pool, deckKey(b.cell, spot, day, things[0].rarity), 0)), null), test: true } : { result: "miss" };
+  }
+  const where = [r.me.id, b.cell, LAYER, spot, day, b.dir];
+  const taken = async () => (await db.prepare("SELECT COUNT(*) AS n FROM finds WHERE player_id = ? AND cell = ? AND layer = ? AND spot = ? AND day = ? AND wall = ?").bind(...where).first()).n;
+  let slot = await taken();
+  if (slot >= things.length) { await numberPending(env, db, r.me.id); return { result: "done" }; }
+  const got = (await db.prepare("INSERT INTO search_prog (player_id, cell, layer, spot, day, wall, searches) VALUES (?,?,?,?,?,?,1) ON CONFLICT (player_id, cell, layer, spot, day, wall) DO UPDATE SET searches = searches + 1 RETURNING searches")
+    .bind(...where).first()).searches;
+  const before = things.slice(0, slot).reduce((n, t) => n + t.need, 0);            // searches the things already found took
+  if (got < before + things[slot].need) return { result: "miss", noise: got - before >= NEAR_AFTER && Math.random() < NEAR_CHANCE };
   for (let tries = 0; tries < 8; tries++) {
-    const pos = (await db.prepare("SELECT COUNT(*) AS n FROM finds WHERE cell = ? AND layer = ? AND spot = ? AND day = ?").bind(b.cell, LAYER, spot, day).first()).n;
+    const rarity = things[slot].rarity, pool = await poolFor(rarity);
+    if (!pool.length) return { result: "miss" };
+    const key = deckKey(b.cell, spot, day, rarity);
+    const pos = (await db.prepare("SELECT COUNT(*) AS n FROM finds WHERE cell = ? AND layer = ? AND spot = ? AND day = ? AND rarity = ?").bind(b.cell, LAYER, spot, day, rarity).first()).n;
     const item = pool.find((i) => i.id === dealt(pool, key, pos));
     try {                                                                            // saved first, numbered by the registry a moment later (src/copies.js)
-      const row = await db.prepare("INSERT INTO finds (player_id, cell, layer, spot, day, rarity, deck_pos, item_id, created_at) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id")
-        .bind(r.me.id, b.cell, LAYER, spot, day, hid.rarity, pos, item.id, sec(ctx.t)).first();
+      const row = await db.prepare("INSERT INTO finds (player_id, cell, layer, spot, day, wall, slot, rarity, deck_pos, item_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id")
+        .bind(r.me.id, b.cell, LAYER, spot, day, b.dir, slot, rarity, pos, item.id, sec(ctx.t)).first();
       const copy = await numberFind(env, db, { id: row.id, player_id: r.me.id, item_id: item.id });
       return { result: "found", item: showItem(item, copy) };
     } catch (e) {
       if (!isUnique(e)) throw e;
-      if (await db.prepare("SELECT 1 AS x FROM finds WHERE player_id = ? AND cell = ? AND layer = ? AND spot = ? AND day = ?").bind(r.me.id, b.cell, LAYER, spot, day).first()) { await numberPending(env, db, r.me.id); return { result: "done" }; }
-    }                                                                                // someone else took that place or copy a moment ago: try the next
+      const now = await taken();
+      if (now > slot) { await numberPending(env, db, r.me.id); return { result: "done" }; }   // the same player's other press got it first
+    }                                                                                // someone else took that deck place a moment ago: try the next
   }
   throw new Oops("Something got in the way. Search again.", 409);
 }

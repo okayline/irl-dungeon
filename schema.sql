@@ -154,21 +154,25 @@ CREATE TABLE IF NOT EXISTS test_unlocks (
   UNIQUE (player_id, cell, layer, door)
 );
 
--- Searching and finds (migrations/005).
+-- Searching and finds (migrations/005, 007).
+-- searches is the running total of searches on one wall by one player on one day. The n-th thing on a wall turns up when
+-- that total reaches the needs of the things up to it (src/search.js), so a find never has to reset anything.
 CREATE TABLE IF NOT EXISTS search_prog (
   player_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   cell        TEXT NOT NULL,
   layer       INTEGER NOT NULL DEFAULT 0,
   spot        TEXT NOT NULL,                  -- the room: wing key + ":" + room number (src/search.js)
   day         INTEGER NOT NULL,
+  wall        TEXT NOT NULL,
   searches    INTEGER NOT NULL,
-  PRIMARY KEY (player_id, cell, layer, spot, day)
+  PRIMARY KEY (player_id, cell, layer, spot, day, wall)
 );
--- An item found: one per player per room per day. item_id is the id in the shared item table (okayline/dungeon-items).
--- deck_pos is the place in that room-day's shuffled deck (src/deal.js), unique, so no two players get the same kind
--- until the deck is used up; copy is which copy of that item this is (1, 2, 3...), unique per item. The number comes from
--- the shared registry (migrations/006): a find is saved first and numbered a moment later, so copy may be empty until
--- then. Empty values never clash, so any number of finds can be waiting.
+-- An item found: a wall hides 0 to 3 things and each is found once per player per day, so a find is one (wall, slot).
+-- item_id is the id in the shared item table (okayline/dungeon-items). deck_pos is the place in that room-day's shuffled
+-- deck of that rarity (src/deal.js), unique per rarity, so no two players get the same kind until the deck is used up;
+-- copy is which copy of that item this is (1, 2, 3...), unique per item. The number comes from the shared registry
+-- (migrations/006): a find is saved first and numbered a moment later, so copy may be empty until then. Empty values
+-- never clash, so any number of finds can be waiting.
 CREATE TABLE IF NOT EXISTS finds (
   id          INTEGER PRIMARY KEY,
   player_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -176,13 +180,15 @@ CREATE TABLE IF NOT EXISTS finds (
   layer       INTEGER NOT NULL DEFAULT 0,
   spot        TEXT NOT NULL,
   day         INTEGER NOT NULL,
+  wall        TEXT NOT NULL DEFAULT '',
+  slot        INTEGER NOT NULL DEFAULT 0,
   rarity      TEXT NOT NULL,
   deck_pos    INTEGER NOT NULL,
   item_id     INTEGER NOT NULL,
   copy        INTEGER,
   created_at  INTEGER NOT NULL,
-  UNIQUE (player_id, cell, layer, spot, day),
-  UNIQUE (cell, layer, spot, day, deck_pos),
+  UNIQUE (player_id, cell, layer, spot, day, wall, slot),
+  UNIQUE (cell, layer, spot, day, rarity, deck_pos),
   UNIQUE (item_id, copy)
 );
 CREATE INDEX IF NOT EXISTS finds_by_player ON finds (player_id, id);

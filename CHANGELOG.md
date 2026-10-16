@@ -2,6 +2,12 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.10 - Fuller Walls - Oct 15 2026, 10:55 PM HST
+
+- **Walls hide more, and give it up faster.** Every wall without a door now hides 0 to 3 things (before, a room hid one thing behind one wall). The first thing on a wall takes 3 to 6 searches; each one after it takes half again as many. You can find things on every wall of a room, every day.
+- A faint noise now comes sooner (after 2 searches into a thing), and a bare wall still never answers.
+- "Nothing more here today" now means that wall has given you everything.
+
 ## v0.09 - Numbered - Oct 15 2026, 10:35 PM HST
 
 - **Every find is a numbered copy, and the numbers are shared with the other games.** The number now comes from one registry used by all the games, so "#4" of an item is the fourth copy anywhere, not just here.
