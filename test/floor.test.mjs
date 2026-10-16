@@ -1,4 +1,4 @@
-// src/floor.js is 4Dungeon's floor generator. These tests check 4Dungeon's documented rules from outside,
+// public/floor.js is 4Dungeon's floor generator. These tests check 4Dungeon's documented rules from outside,
 // by walking floors the way a player does, never by asking the code what it thinks the answer is.
 import test from "node:test";
 import assert from "node:assert/strict";

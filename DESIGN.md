@@ -25,7 +25,7 @@ Status: **foundation plus a first screen** (players, save codes, passkeys, the c
 **Days and seasons.**
 - A cell offers a fresh wing every day.
 - How long a season is: **not known yet.** 4Dungeon's moon quarter (about 7.4 days) is a working assumption only.
-- A cell's season layer is a 4Dungeon **floor** (`src/floor.js`); each day's wing is a wing of that floor. Keep a layer/depth index in every key so depth can be added later without a migration.
+- A cell's season layer is a 4Dungeon **floor** (`public/floor.js`); each day's wing is a wing of that floor. Keep a layer/depth index in every key so depth can be added later without a migration.
 - When a season ends, its layer is **kept, never deleted**: it stays readable and walkable and its ledger entries stay. New layers build on old ones.
 - Growth: layers spread **horizontally** (more wings, more spaces) for several seasons first, and only then start going **down**. Don't go down too quickly.
 
