@@ -2,6 +2,14 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.05 - Signed and Saved - Oct 15 2026, 07:37 PM HST
+
+- **Locked doors open.** Step into one and it asks first; step again to spend today's key on it. Your opened doors come back when you return, on any of your devices.
+- **First finders.** Walk every room of a wing before anyone else and it's yours on the ledger. Press Y (or tap [Y] SIGN IT) to sign it with a two-word name, and U to unsign it. The right panel shows who found the wing you're in.
+- **Your name** is made when you first sign something. Reroll it any time in [S]AVE.
+- **Saved cells** in [S]AVE: save the cell you're in, then GO back to it later from any device.
+- **[S]AVE opens instantly**, has a COPY button for a new save code (and you can select the code), and the black bar at the bottom is gone.
+
 ## v0.04 - Street Door - Oct 15 2026, 07:08 PM HST
 
 - **No location prompt needed.** The game starts you in a cell near you, guessed roughly from your connection. Your browser's location (press L) is now optional.
