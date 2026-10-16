@@ -60,32 +60,36 @@ test("turning: left from north is west, right from north is east, four turns com
   assert.equal(turn(turn(base, "L"), "R").facing, "N");
 });
 
-test("a step goes through an open door, and never through a wall or a locked door", () => {
-  let moved = 0, shut = 0, walled = 0;
+test("a step goes through an open door, and a wall or a sealed door stops you; a locked door asks to be unlocked and moves nothing", () => {
+  let moved = 0, shut = 0, walled = 0, sealed = 0;
   for (const c of cells) {
-    const st0 = start(c);
     for (const facing of ["N", "E", "S", "W"]) {
-      // walk everywhere reachable first, so that locked doors (exits) and walls are both met
-      let st = { ...st0, facing };
+      let st = { ...start(c), facing };
       const before = st.at, doorTo = st.floor.rooms[before].doors[facing];
       const after = step(st);
-      if (doorTo === undefined) { assert.equal(after.at, before); assert.deepEqual(after.visited, st.visited); walled++; }
-      else if (!st.floor.rooms[doorTo]) { assert.equal(after.at, before); shut++; }
+      if (doorTo === undefined) { assert.equal(after.at, before); assert.deepEqual(after.visited, st.visited); assert.equal(after.unlock, undefined); walled++; }
+      else if (!st.floor.rooms[doorTo]) { assert.equal(after.at, before); assert.equal(after.unlock, doorTo); shut++; }
       else { assert.equal(after.at, doorTo); assert.equal(after.visited[doorTo], true); moved++; }
     }
   }
-  assert.ok(moved > 0 && walled > 0);
+  // a sealed door: open one of a pair, then face the other
+  for (const c of cells) {
+    const st = start(c), [first, second] = FLOOR.lockedDoors(st.floor);
+    if (second === undefined) continue;
+    FLOOR.growDoor(st.floor, first);
+    for (const room of st.floor.rooms) if (room) for (const [dir, to] of Object.entries(room.doors)) if (to === second) {
+      const idx = st.floor.rooms.indexOf(room), r = step({ ...st, at: idx, facing: dir }, (a) => a[0]);
+      assert.equal(r.unlock, undefined); assert.equal(r.at, idx); assert.match(r.log, /jammed shut/); sealed++;
+    }
+  }
+  assert.ok(moved > 0 && walled > 0 && shut > 0 && sealed > 0);
 });
 
-test("every locked door met on a walk of a whole wing stays shut (nothing opens without the key)", () => {
+test("walking alone never builds another wing: only the server's yes unlocks a door", () => {
   for (const c of cells) {
-    let st = start(c), met = 0;
-    for (let n = 0; n < 40; n++) {
-      const room = st.floor.rooms[st.at], j = room.doors[st.facing];
-      if (j !== undefined && !st.floor.rooms[j]) { const at = st.at; st = step(st); assert.equal(st.at, at); met++; }
-      st = n % 2 ? turn(st, "R") : step(st);
-    }
-    assert.equal(st.floor.wings.length, 1, "walking alone never builds another wing");
+    let st = start(c);
+    for (let n = 0; n < 40; n++) { st = n % 2 ? turn(st, "R") : step(st); delete st.unlock; }
+    assert.equal(st.floor.wings.length, 1);
   }
 });
 

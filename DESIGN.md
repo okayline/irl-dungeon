@@ -63,7 +63,7 @@ Trimmed from `daily-dungeon/floor.js` (43cebc2): wing layout and door/sealing co
 
 `public/screen.js` is 4Dungeon's 80-column frame with only what this game has: the moon-and-date header, the 3D view, a right panel (cell id, wing, room, the minimap), three log lines (what is here, what you just did, what is ahead) and a keys line. Party, HP/MP, silver, ichor, breath, the title, sky, fights and bag are removed. The minimap is 4Dungeon's, without its locker and stairs marks. The page finds the cell with the browser's location (press L; the browser asks first): `public/place.js` turns the position into a resolution-10 cell id with the vendored h3-js and drops the coordinates. `?cell=<id>` still works to look at any cell. The shared seed comes from `FLOOR.seedFor(cell, layer)` (FNV-1a, provisional). A locked door says it is locked: opening one needs the key, which needs the server.
 
-The keys line also has `[S]AVE`, which opens a panel inside the 3D view (like 4Dungeon's bag): make or forget save codes (shown once), add or forget passkeys, log in with a code or a passkey, log out (the server only allows it once a way back exists). `U` is kept free for `[U]NLOCK`.
+The keys line also has `[S]AVE`, which opens a panel inside the 3D view (like 4Dungeon's bag): make or forget save codes (shown once), add or forget passkeys, log in with a code or a passkey, log out (the server only allows it once a way back exists).
 
 ## Outside code
 

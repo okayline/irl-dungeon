@@ -167,6 +167,16 @@ const FLOOR = (() => {
     return i;
   }
 
+  // Doors by number rather than by direction. Direction labels are rotated per player (see symTransform), but a door's
+  // number (its room index) is the same for everyone who takes the same path, so the server and the page agree on it.
+  // lockedDoors: the doors that can be unlocked right now (not built, not sealed). growDoor: unlock one by number.
+  const lockedDoors = (floor) => Object.keys(floor.exits).map(Number).filter(i => !floor.rooms[i] && !(floor.sealed && floor.sealed[i]));
+  function growDoor(floor, door) {
+    if (!lockedDoors(floor).includes(door)) return undefined;
+    const e = floor.exits[door];
+    return grow(floor, e.from, symTransform(floor.sym).dir(e.dir));
+  }
+
   // A door whose offer was settled the other way: it stays shut for good.
   const isSealed = (floor, from, dir) => { const i = floor.rooms[from].doors[dir]; return i !== undefined && !floor.rooms[i] && !!(floor.sealed && floor.sealed[i]); };
 
@@ -248,7 +258,7 @@ const FLOOR = (() => {
     return { at: 0, visited: [true], facing: Object.keys(floor.rooms[0].doors)[0] };
   }
 
-  const api = { generate, grow, minimap, arrive, seedFor, rng, isSealed, symTransform, DAYS };
+  const api = { generate, grow, growDoor, lockedDoors, minimap, arrive, seedFor, rng, isSealed, symTransform, DAYS };
   return api;
 })();
 export default FLOOR;

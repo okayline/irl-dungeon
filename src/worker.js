@@ -10,8 +10,15 @@
 //   POST /api/logout                  this browser forgets its player (needs a save code or passkey first)
 //   GET  /api/ledger?before=&limit=   newest first: id, kind, record, prev_hash, hash, date (never who, never the time)
 //   GET  /api/verify                  checks the whole chain and returns its head (keep a copy: see ledger.js)
+//   POST /api/run {cell, offset?}     open a cell: your private seed, the doors you've unlocked, the wings you've finished
+//   POST /api/unlock {cell, door, offset}   spend today's key on a locked door (one a day, by your local day)
+//   POST /api/walk {cell, visited}    the rooms you've stood in; any wing this completes is recorded, and its first finder sealed
 
-import { GENESIS, sha256, verifyChain } from "./ledger.js";
+import { GENESIS, sha256, verifyChain, head, chainInserts, isUnique, chainClash } from "./ledger.js";
+import FLOOR from "../public/floor.js";
+import { isCell } from "../public/place.js";
+import { LAYER, buildFloor, wingKey, finishedWings } from "./game.js";
+import { localDay, dayFor, offsetCheck, BadOffset } from "./day.js";
 import { MAX_CODES, newSaveCode, hashCode, newSession, newToken, rateLimit } from "./saves.js";
 import { registerOptions, verifyRegistration, loginOptions, verifyLogin } from "./passkeys.js";
 
@@ -29,6 +36,7 @@ const ROUTES = {
   "GET /api/account": account, "POST /api/codes": codes, "POST /api/load": loadCode,
   "POST /api/passkey": passkey, "POST /api/logout": logout,
   "GET /api/ledger": ledger, "GET /api/verify": verify,
+  "POST /api/run": run, "POST /api/unlock": unlock, "POST /api/walk": walk,
 };
 
 export default {
@@ -196,4 +204,89 @@ async function logout(ctx) {
   if (!s.meta.changes) await db.prepare("UPDATE players SET token_hash = ? WHERE id = ? AND token_hash = ?").bind(await sha256(newToken()), me.id, h).run();
   ctx.setCookie = CLEAR_COOKIE;
   return { ok: true };
+}
+
+// ---------- the game: cells, the key, and finished wings ----------
+
+const need = (ok, msg, status = 400) => { if (!ok) throw new Oops(msg, status); };
+
+// The cell and the player's run in it. Creates the player (rate limited) and their private seed on first sight.
+async function theRun(ctx, b, create) {
+  need(isCell(b.cell), "That isn't a cell.");
+  const me = create ? await player(ctx, true) : await must(ctx);
+  let row = await ctx.db.prepare("SELECT pseed FROM cell_runs WHERE player_id = ? AND cell = ? AND layer = ?").bind(me.id, b.cell, LAYER).first();
+  if (!row) {
+    need(create, "Open the cell first.", 404);
+    const pseed = crypto.getRandomValues(new Uint32Array(1))[0] || 1;
+    await ctx.db.prepare("INSERT OR IGNORE INTO cell_runs (player_id, cell, layer, pseed, created_at) VALUES (?,?,?,?,?)").bind(me.id, b.cell, LAYER, pseed, sec(ctx.t)).run();
+    row = await ctx.db.prepare("SELECT pseed FROM cell_runs WHERE player_id = ? AND cell = ? AND layer = ?").bind(me.id, b.cell, LAYER).first();
+  }
+  const doors = (await ctx.db.prepare("SELECT door FROM unlocks WHERE player_id = ? AND cell = ? AND layer = ? ORDER BY id").bind(me.id, b.cell, LAYER).all()).results.map((r) => r.door);
+  return { me, pseed: row.pseed, doors, floor: buildFloor(b.cell, row.pseed, doors) };
+}
+
+const lastKeyDay = async (ctx, me) => (await ctx.db.prepare("SELECT MAX(day) AS d FROM unlocks WHERE player_id = ?").bind(me.id).first()).d;
+const dayOf = (ctx, offset, last) => { try { return dayFor(ctx.t, offset, last); } catch (e) { if (e instanceof BadOffset) throw new Oops(e.message); throw e; } };
+
+async function run(ctx) {
+  const b = await body(ctx), r = await theRun(ctx, b, true), { db } = ctx;
+  const completed = (await db.prepare("SELECT wing_key FROM completions WHERE player_id = ? AND cell = ? AND layer = ?").bind(r.me.id, b.cell, LAYER).all()).results.map((x) => x.wing_key);
+  const last = await lastKeyDay(ctx, r.me);
+  // keyReady is only worked out when the page says what time zone offset it is on
+  const keyReady = b.offset === undefined ? null : dayOf(ctx, b.offset, last) > (last ?? -Infinity);
+  return { layer: LAYER, days: FLOOR.DAYS, pseed: r.pseed, unlocks: r.doors, completed, keyReady };
+}
+
+async function unlock(ctx) {
+  const b = await body(ctx), { db, env, req } = ctx;
+  if (!(await rateLimit(env, req, "unlock", 120, 3600))) throw new Oops("Too many tries. Try again later.", 429);
+  need(Number.isInteger(b.door) && b.door >= 0, "That isn't a door.");
+  const r = await theRun(ctx, b, false);
+  const last = await lastKeyDay(ctx, r.me), day = dayOf(ctx, b.offset, last);
+  if (last != null && day <= last) throw new Oops("The door won't unlock. Today's key is spent. Another comes tomorrow.", 403);
+  need(FLOOR.lockedDoors(r.floor).includes(b.door), "That isn't a door you can unlock.");
+  try {
+    await db.prepare("INSERT INTO unlocks (player_id, cell, layer, door, day, tz_check, created_at) VALUES (?,?,?,?,?,?,?)")
+      .bind(r.me.id, b.cell, LAYER, b.door, day, offsetCheck(b.offset, req.cf && req.cf.timezone, ctx.t), sec(ctx.t)).run();
+  } catch (e) { if (isUnique(e)) throw new Oops("The door won't unlock. Today's key is spent. Another comes tomorrow.", 403); throw e; }
+  return { ok: true, door: b.door, day };
+}
+
+// The rooms the player has stood in. Any wing this completes is recorded for them; if nobody had finished that wing
+// before, they are its first finder, sealed on the ledger in the same batch (anonymous: no name, no id in the entry).
+async function walk(ctx) {
+  const b = await body(ctx), { db, env, req } = ctx;
+  if (!(await rateLimit(env, req, "walk", 240, 3600))) throw new Oops("Too many tries. Try again later.", 429);
+  const r = await theRun(ctx, b, false);
+  const fin = finishedWings(r.floor, r.doors, b.visited);
+  need(fin.ok, fin.error);
+  const have = new Set((await db.prepare("SELECT wing_key FROM completions WHERE player_id = ? AND cell = ? AND layer = ?").bind(r.me.id, b.cell, LAYER).all()).results.map((x) => x.wing_key));
+  const out = [];
+  for (const w of fin.wings) {
+    if (have.has(w.key)) continue;
+    out.push({ key: w.key, wing: w.wing, first: await recordWing(ctx, r.me, b.cell, w) });
+  }
+  return { wings: out, completed: [...new Set([...have, ...out.map((o) => o.key)])] };
+}
+
+// Record one finished wing. Returns true if this player is its first finder. The completion, the first-finder row and
+// the ledger entry go in one batch, so they all happen or none do. If someone else took "first" a moment earlier, the
+// database refuses ours and we record just the completion; if the ledger head moved, we try again on the new head.
+async function recordWing(ctx, me, cell, w) {
+  const { db } = ctx, t = sec(ctx.t);
+  const done = db.prepare("INSERT OR IGNORE INTO completions (player_id, cell, layer, wing_key, created_at) VALUES (?,?,?,?,?)").bind(me.id, cell, LAYER, w.key, t);
+  for (let i = 0; i < 8; i++) {
+    const taken = await db.prepare("SELECT 1 AS x FROM wing_firsts WHERE cell = ? AND layer = ? AND wing_key = ?").bind(cell, LAYER, w.key).first();
+    if (taken) { await done.run(); return false; }
+    const record = JSON.stringify({ cell, layer: LAYER, wing: w.key });
+    const stmts = [done, db.prepare("INSERT INTO wing_firsts (cell, layer, wing_key, player_id, created_at) VALUES (?,?,?,?,?)").bind(cell, LAYER, w.key, me.id, t),
+      ...(await chainInserts(db, await head(db), [{ kind: "wing", record, playerId: me.id, t }]))];
+    try { await db.batch(stmts); return true; }
+    catch (e) {
+      if (chainClash(e)) continue;
+      if (isUnique(e) && /wing_firsts/.test(String(e.message))) continue;     // lost the race for "first": the next pass records just the completion
+      throw e;
+    }
+  }
+  throw new Oops("The ledger is busy. Try again.", 503);
 }

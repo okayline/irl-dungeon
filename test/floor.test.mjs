@@ -92,3 +92,41 @@ test("KNOWN GAP: a walk can strand a floor with one-space wings (about 1 in 700 
   for (const [s, p, d] of seeds(20000)) if (walk(s, p, d).stuck) stuck++;
   assert.ok(stuck > 0 && stuck < 100, `stuck=${stuck}`);
 });
+
+test("doors by number: lockedDoors lists exactly the unbuilt, unsealed exits, and growDoor opens only those", () => {
+  for (const [s, p, d] of seeds(300)) {
+    const f = FLOOR.generate(s, p, { days: d });
+    for (let n = 0; n < 6; n++) {
+      const locked = FLOOR.lockedDoors(f);
+      const byHand = [];                                       // worked out from the room doors themselves
+      f.rooms.forEach((r, from) => { if (!r) return; for (const to of Object.values(r.doors)) if (!f.rooms[to] && !(f.sealed && f.sealed[to])) byHand.push(to); });
+      assert.deepEqual([...locked].sort((a, b) => a - b), [...new Set(byHand)].sort((a, b) => a - b));
+      if (!locked.length) break;
+      assert.equal(FLOOR.growDoor(f, locked[locked.length - 1]), locked[locked.length - 1]);
+      assert.equal(f.rooms[locked[locked.length - 1]] !== undefined, true);
+    }
+  }
+});
+
+test("growDoor refuses a door that is built, sealed, or not a door at all", () => {
+  for (const [s, p, d] of seeds(200)) {
+    const f = FLOOR.generate(s, p, { days: d });
+    const [first, second] = FLOOR.lockedDoors(f);
+    if (second === undefined) continue;
+    FLOOR.growDoor(f, first);
+    assert.equal(FLOOR.growDoor(f, first), undefined, "already built");
+    assert.equal(FLOOR.growDoor(f, second), undefined, "sealed by the other");
+    for (const bad of [-1, 0, 99999, 1.5, NaN, "3"]) assert.equal(FLOOR.growDoor(f, bad), undefined);
+  }
+});
+
+test("the same door number leads to the same wing whatever the player's private seed", () => {
+  for (const [s, , d] of seeds(200)) {
+    const a = FLOOR.generate(s, 1, { days: d }), b = FLOOR.generate(s, 987654, { days: d });
+    const door = FLOOR.lockedDoors(a)[0];
+    assert.deepEqual(FLOOR.lockedDoors(a), FLOOR.lockedDoors(b));
+    FLOOR.growDoor(a, door); FLOOR.growDoor(b, door);
+    assert.deepEqual(a.wings.map((w) => w.rooms), b.wings.map((w) => w.rooms), "same rooms in each wing");
+    assert.deepEqual(FLOOR.lockedDoors(a), FLOOR.lockedDoors(b));
+  }
+});

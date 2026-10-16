@@ -44,8 +44,8 @@ export async function chainInserts(db, prev, entries) {
   return stmts;
 }
 
-const isUnique = (e) => /UNIQUE/i.test(String(e && e.message));
-const chainClash = (e) => isUnique(e) && /ledger\.(prev_)?hash/.test(String(e.message));
+export const isUnique = (e) => /UNIQUE/i.test(String(e && e.message));
+export const chainClash = (e) => isUnique(e) && /ledger\.(prev_)?hash/.test(String(e.message));
 
 // Seal one entry on the current head. Returns "sealed", or "duplicate" if some other unique rule (added later for a
 // particular kind of entry) says it is already there. Someone else moving the head first is retried; if the ledger

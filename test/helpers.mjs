@@ -32,14 +32,16 @@ export const makeEnv = (extra = {}) => ({ DB: fakeD1(), ...extra });
 
 // A browser: remembers the cookie the Worker sets, and sends a (fixed) client address so rate limits can be tested.
 // Each call returns { status, data, headers }.
-export function browser(env, { ip = "203.0.113.1", origin = "https://irl.example" } = {}) {
+export function browser(env, { ip = "203.0.113.1", origin = "https://irl.example", cf = null } = {}) {
   let cookie = "";
   const me = async (path, body, { method, headers = {}, raw } = {}) => {
-    const res = await worker.fetch(new Request(origin + path, {
+    const req = new Request(origin + path, {
       method: method || (body !== undefined || raw !== undefined ? "POST" : "GET"),
       headers: { "cf-connecting-ip": ip, ...(body !== undefined ? { "content-type": "application/json" } : {}), ...(cookie ? { cookie } : {}), ...headers },
       body: raw !== undefined ? raw : body !== undefined ? JSON.stringify(body) : undefined,
-    }), env);
+    });
+    if (cf) Object.defineProperty(req, "cf", { value: cf });         // what Cloudflare adds to a request (here, only what a test sets)
+    const res = await worker.fetch(req, env);
     const set = res.headers.get("set-cookie");
     if (set) cookie = set.split(";")[0];
     let data = null;
