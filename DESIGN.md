@@ -57,6 +57,49 @@ Status: **v0.03** (players, save codes, passkeys, the chained ledger, `public/fl
 5. **Anchoring the head.** A chain can't show that its newest entries were dropped. Publish the head hash somewhere outside the database (see `src/ledger.js`).
 6. **Real-world safety.** A game that rewards visiting places can send people onto roads or private land. It needs a line in the game and in the about page.
 7. **Signing.** Decided: optional, offered after each first find. The SAVE panel says a name is "shown on finds you sign, with their cell". A player can unsign any find they signed (`[U] UNSIGN` in the right panel while in that wing), sealed as an `unsign` entry; their name is kept for next time. Still open: a signed name plus its cells is a trail of places a person has been; whether to say that more plainly. The word lists are dawn-baton's for now (this game is lighter).
+8. **Item pools.** The deck for a room-day is as big as the pool for its rarity, so each rarity needs a pool at least as large as the most players one room might see in a day. How big, and who writes them (check `voice-guide.md` in dungeon-notes first).
+9. **Which real-world signals do what.** Which moon phases offer a MOON room, what a SUN room is and when it is offered, how the season and time of day shift drops, and what a "golden hour" find is.
+10. **First finder of an item kind in a place.** Whether that goes on the ledger, and what it attaches to (as with wings).
+11. **Where a button's picture comes from.** Linking straight to 88x31's `/api/img` (works today, no hotlink protection, depends on 88x31 being up) or keeping a copy.
+12. **Putting a found button into the 88x31 collection.** Needs accounts linked across the games (passkeys are per address and each game has its own players) and 88x31 granting the copy. Not planned yet.
+13. **Keeping, using and trading.** Whether finds are a collection you keep, and how trading would work. Stand-ins for 4Dungeon's bay, forge, vault and altar.
+
+## Rooms and items (a plan: nothing here is built yet)
+
+Written Oct 15 2026 (HST) from a design conversation with the owner. Rooms are empty today. This is what they will hold. Anything marked *open* is not decided.
+
+### Wings and room kinds
+- A wing is 3 spaces: one **room**, one **passage**, one **dead end** (4Dungeon's own wing code; checked on 300 cells). Only the room has a kind. The passage is quiet; the dead end hides a clue about the day's two locked doors (as in 4Dungeon).
+- Each day the player chooses between two locked doors, and the two lead to rooms of different kinds, hinted by the door's clue ("warm air breathes along the bottom of the door" is a den). The choice is the day's decision.
+- New kinds for this game: a **MOON room** and a **SUN room**, alongside 4Dungeon's **den** (a heap of things left behind). 4Dungeon's archive ("everything ever saved, take one") is an item room too and can come later.
+- 4Dungeon's bay, forge, vault and altar depend on things this game cut (breath, silver, taint). They are left out until there is something for them to do.
+- **The real world decides which kinds are offered and what drops:** the date and season, the time of day (the player's local time, already sent), the moon's phase (computed; the header already shows it), and the sun at the cell (sunrise, sunset, golden hour, solstices and equinoxes, computed as dawn-baton's `engine/sun.js` does). MOON rooms only under a bright moon. All of this is computed in code: no outside service. Weather would need one (as in dawn-baton), so it is **not planned** without asking.
+
+### Items
+- **Not scarce and not one-of-a-kind (yet).** Everyone can find their own copy. Each find is a **numbered copy** ("a subway token, #4821"), so every find is a distinct thing, as the cLuB's copies are.
+- **Different but equal.** Two players are never offered the same kind from the same room on the same day. Each room, each day, is a **deck**: shuffled from a seed (cell, room, day), every card the same rarity, and the Nth player to search gets the Nth card. The deck is as large as the pool for that rarity, so pools must be big. This keeps trading meaningful (nobody holds what the other has) without making anything scarce. Trading itself is not built.
+- This brings back 4Dungeon's "**shape is shared, contents are private**": the dungeon is the same for everyone; what you find is yours.
+- **Rarities** (4Dungeon's): COMMON, UNCOMMON, RARE and MOON now. **MYTHIC** ("old-layer relics") is kept for when layers exist.
+- 4Dungeon's items are mostly small, odd ruined-city objects with a one-line note ("a subway token. For a line that was never built."). Its pools: 12 common, 12 uncommon, 12 rare, 6 mythic, 4 moon. Items with game effects there (medicine that heals the party, a candle that calms the room) are used here as name and note only: no party, no heat.
+- **The ledger holds scarce things only** (a first find, or a one-of-a-kind item if those ever exist). Sealing every pickup would bloat it and queue every write on one chain. Ordinary finds live in the player's own record.
+
+### One item table for all the games (the goal)
+The owner wants a single item table that every game reads, so a change in one place changes all of them.
+- **A shared table in its own database** in the Cloudflare account (several Workers can use one database). One row per kind of item: a **stable id** (append-only: never reorder or delete; retire with a flag), a **source** (4Dungeon, irl-dungeon, 88x31), a rarity, a name, a note, an optional picture, a retired flag. Players' finds refer to items by id, so text edits are always safe and ids never shift.
+- **Stages, each shippable on its own:**
+  1. Seed the table once from 4Dungeon's `CATALOG` in `daily-dungeon/rules.js` (a script reads the file from GitHub and takes name, note and rarity; the effect code is ignored; 4Dungeon is not changed). From then on the table is the master. irl-dungeon reads it.
+  2. Add **88x31 buttons** (below).
+  3. **4Dungeon reads the table too** (low priority; the owner is fine with changing it). It is a static page on itch.io, so its leaderboard Worker would serve the table, with its built-in list as the fallback so the game still works offline.
+- Alternative not chosen: a separate repo holding only item data, which each game syncs from.
+
+### 88x31 buttons in irl-dungeon
+- The aim: an **existing** 88x31 button appears as a find in a dungeon, instead of rolling a new one.
+- It needs **88x31's public API, not its ledger**: `GET /api/designs` (the catalog) and `GET /api/img?d=N` (the GIF). The ledger is the history of who got which copy; the catalog is all that is needed to offer a button.
+- Only **active, uncapped (`max_editions` null) buttons that a logged-out viewer can see** are offered. The public list already hides rare, prototype, ultra and special buttons (so only commons are visible), and capped buttons are scarce in 88x31, so handing them out here would cheapen them. Removed buttons are not offered (the list leaves them out, and a snapshot must follow that).
+- Show **credit and license** as 88x31 does (archive-tier art is found in the wild, shown as found, credited where known, not relicensed).
+- The button found here is **irl-dungeon's own item**, not a copy in the player's 88x31 collection. Putting it into their collection means one game writing into the other, accounts linked across games, and 88x31's scarcity rules covering it: a bigger project, later (see open question 12).
+- 88x31 stays the master of buttons (uploads, moderation, removal). The shared table points at them by a sync from the public API, kept as a snapshot refreshed on a schedule so an 88x31 outage doesn't break dens.
+- The screen is 80 columns of text and a button is a GIF, so a found button is shown in a small panel in the 3D view (like SAVE) with the picture next to its name and credit.
 
 ## `public/floor.js` (trimmed from 4Dungeon)
 
@@ -64,7 +107,7 @@ Trimmed from `daily-dungeon/floor.js` (43cebc2): wing layout and door/sealing co
 - A walk builds days+1 wings, not four as its header says.
 - Wings are 3 spaces; about 0.03% are a 1-space fallback.
 - `floor.stuck` is reachable: about 1 in 700 greedy walks on 6 to 7 day floors (the header says never in practice). Worth fixing in 4Dungeon too.
-- **Open: what do rooms hold?** Empty for now.
+- **What do rooms hold?** Empty for now; see "Rooms and items" above for the plan.
 - The server checks an unlock by rebuilding the floor from the cell's shared seed and the player's unlocked doors (`src/game.js`). Since v0.03 the private seed is the shared seed, so `sym` is the same for everyone.
 
 ## The screen
