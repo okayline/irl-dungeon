@@ -48,7 +48,7 @@ Status: **foundation plus 4Dungeon's floor generator** (players, save codes, pas
 6. **Anchoring the head.** A chain can't show that its newest entries were dropped. Publish the head hash somewhere outside the database (see `src/ledger.js`).
 7. **Real-world safety.** A game that rewards visiting places can send people onto roads or private land. It needs a line in the game and in the about page.
 8. **Signing.** Signing a find ties a consistent name to a trail of cells. The old version offered it; decide whether to keep it, and how to say what it reveals.
-9. **Hosting address.** Live at `irl-dungeon.ddddungeon.workers.dev`. Custom domain `irl.88x33.app` added in Cloudflare on 2026-10-15 (HST). Passkeys belong to one address, so pick the one to use before anyone registers a passkey.
+9. **Hosting address.** Live at `irl-dungeon.ddddungeon.workers.dev`. Custom domain `irl.88x31.app` added in Cloudflare on 2026-10-15 (HST). Passkeys belong to one address, so pick the one to use before anyone registers a passkey.
 
 ## `src/floor.js` (copied from 4Dungeon)
 
