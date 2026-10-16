@@ -243,7 +243,7 @@ function renderScreen(st, now) {
   const ahead = !d ? "" : `> You face ${WORD[st.facing]}: ${d.aheadWord}.`;
   for (const m of [" " + flavor, " " + doing, " " + ahead]) S.push(r(m));
   S.push("+" + "-".repeat(78) + "+");
-  const menu = (d ? " TURN: [A] [D] OR ARROWS    WALK: [W] OR UP    " : " ") + "[L]OCATE";
+  const menu = (d ? " TURN: [A] [D] OR ARROWS    WALK: [W] OR UP    " : " ") + "[L]OCATE   [S]AVE";
   S.push("|" + menu + " ".repeat(78 - menu.length) + "|");
   S.push("+" + "=".repeat(78) + "+");
   return finishFrame(S, st.strict);

@@ -117,3 +117,13 @@ test("the build number is on the page and is the newest entry in CHANGELOG.md", 
   const page = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
   assert.ok(page.includes('id="ver"') && page.includes("VERSION"), "the page must show the build number");
 });
+
+import { b64, unb64 } from "../public/account.js";
+test("the passkey byte helpers match Node's own base64url, for every length", () => {
+  for (let n = 0; n < 70; n++) {
+    const bytes = Uint8Array.from({ length: n }, (_, i) => (i * 37 + n * 11) % 256);
+    assert.equal(b64(bytes), Buffer.from(bytes).toString("base64url"));
+    assert.deepEqual([...unb64(Buffer.from(bytes).toString("base64url"))], [...bytes]);
+  }
+  assert.deepEqual([...unb64("-_8")], [251, 255]);
+});

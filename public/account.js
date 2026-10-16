@@ -1,0 +1,102 @@
+// The SAVE screen: save codes and passkeys. It looks like 4Dungeon's overlays (a panel of screen text laid over the
+// frame, with bracketed buttons); the logic is Dawn Baton's account screen. The server side is src/worker.js.
+// A save code is shown once and only its fingerprint is kept; a passkey keeps only its public half.
+
+export const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+export const unb64 = (t) => { t = t.replace(/-/g, "+").replace(/_/g, "/"); return Uint8Array.from(atob(t + "===".slice((t.length + 3) % 4)), (c) => c.charCodeAt(0)); };
+export const passkeysOk = () => !!(typeof window !== "undefined" && window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+const monthDay = (s) => new Date(s * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
+
+export async function api(path, body) {
+  const res = await fetch("/api/" + path, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  try { return await res.json(); } catch { return { error: "The server didn't answer properly. Try again." }; }
+}
+
+const deviceLabel = () => { const ua = navigator.userAgent; return /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iPhone" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows PC" : "This device"; };
+
+// Draws the panel into `root` (a div over the frame). `onChange()` is called after a login or logout, so the page can
+// refresh; `onClose()` when the player closes it.
+export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchApi = api } = {}) {
+  let newCode = null, msg = "";
+  const pre = root.querySelector("pre");
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+  const line = (text = "", cls) => { const d = el("div", cls, text || " "); pre.appendChild(d); return d; };
+  const button = (label, fn, cls = "") => { const b = el("span", "btn " + cls, `[${label}]`); b.setAttribute("role", "button"); b.tabIndex = 0; b.onclick = fn; b.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } }; return b; };
+  const row = (...parts) => { const d = el("div"); for (const p of parts) d.append(typeof p === "string" ? document.createTextNode(p) : p); pre.appendChild(d); return d; };
+
+  // Text is laid out for 45 columns: this panel sits inside the 3D view (47 columns, 17 rows) and scrolls. The title
+  // row stays at the top and the message row stays at the foot, as in 4Dungeon's bag.
+  async function draw() {
+    const a = await fetchApi("account");
+    pre.textContent = "";
+    root.hidden = false;
+    row(" SAVE", " ".repeat(26), button("CLOSE", close)).className = "top";
+    line(" " + "-".repeat(43));
+    if (a.error) { line(" " + a.error); return; }
+    if (newCode) {
+      line(" YOUR NEW SAVE CODE (shown once)", "gold");
+      line("   " + newCode, "gold code");
+      line(" Write it down. It can't be shown again.");
+      row("   ", button("DOWNLOAD AS A TEXT FILE", download));
+      row("   ", button("DONE", () => { newCode = null; draw(); }));
+      line();
+    }
+    line(` SAVE CODES (${a.codes.length}/5)`);
+    for (const c of a.codes) row(`   made ${monthDay(c.created_at)}${c.last_used_at ? ", used " + monthDay(c.last_used_at) : ""}  `, button("FORGET", () => forget("codes", c.id)));
+    if (!a.codes.length) line("   None yet.", "dim");
+    row("   ", button("MAKE A SAVE CODE", makeCode));
+    line();
+    line(` PASSKEYS (${a.passkeys.length})`);
+    for (const k of a.passkeys) row(`   ${(k.label || "passkey").slice(0, 14)}, ${monthDay(k.created_at)}  `, button("FORGET", () => forget("passkey", k.id)));
+    if (!a.passkeys.length) line("   None yet.", "dim");
+    if (passkeysOk()) row("   ", button("ADD A PASSKEY", addPasskey));
+    else line("   This browser can't do passkeys.", "dim");
+    line();
+    line(" LOG IN ON THIS DEVICE");
+    const input = el("input", "codebox"); input.placeholder = "K7QM-2XPA-9RTD-HV4C-8NBE"; input.autocomplete = "off"; input.spellcheck = false; input.maxLength = 40;
+    input.onkeydown = (e) => { if (e.key === "Enter") useCode(input.value); e.stopPropagation(); };
+    row("   ", input);
+    row("   ", button("USE CODE", () => useCode(input.value)));
+    if (passkeysOk()) row("   ", button("LOG IN WITH A PASSKEY", loginPasskey));
+    line();
+    if (a.codes.length || a.passkeys.length) row(" ", button("LOG OUT OF THIS BROWSER", logout));
+    line();
+    line(a.player ? ` Saved on ${a.devices} device${a.devices === 1 ? "" : "s"}.` : " No player yet. A code or passkey makes one.", "dim");
+    line(msg ? " " + msg : "", "msg foot");
+  }
+
+  const say = (t) => { msg = t; const m = pre.querySelector(".msg"); if (m) m.textContent = " " + t; };
+  const close = () => { root.hidden = true; pre.textContent = ""; onClose(); };
+  async function after(r, ok) { if (r.error) return say(r.error); if (ok) msg = ok; draw(); onChange(); }
+
+  async function makeCode() { const r = await fetchApi("codes", { action: "new" }); if (r.error) return say(r.error); newCode = r.code; msg = ""; draw(); onChange(); }
+  async function forget(path, id) { const r = await fetchApi(path, { action: "remove", id }); if (r.error) return say(r.error); msg = "Forgotten."; draw(); }
+  async function useCode(code) { if (!code.trim()) return say("Type your save code first."); after(await fetchApi("load", { code }), "Logged in."); }
+  async function logout() { after(await fetchApi("logout", {}), "Logged out."); }
+  function download() {
+    const text = `irl-dungeon save code\n\n${newCode}\n\nGo to ${location.origin}, press SAVE, and type this code under "Log in on this device" to be your player on any browser.\nKeep this file private: anyone with the code can log in as you.\n`;
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" })); a.download = "irl-dungeon-save-code.txt";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  async function addPasskey() {
+    try {
+      say("Waiting for your fingerprint, face or PIN...");
+      const o = await fetchApi("passkey", { action: "register_options" }); if (o.error) return say(o.error);
+      const cred = await navigator.credentials.create({ publicKey: { ...o, challenge: unb64(o.challenge), user: { ...o.user, id: unb64(o.user.id) }, excludeCredentials: o.excludeCredentials.map((c) => ({ ...c, id: unb64(c.id) })) } });
+      const r = await fetchApi("passkey", { action: "register", label: deviceLabel(), credential: { id: cred.id, response: { clientDataJSON: b64(cred.response.clientDataJSON), attestationObject: b64(cred.response.attestationObject) } } });
+      after(r, "Passkey added.");
+    } catch (e) { say(e && e.name === "NotAllowedError" ? "Passkey cancelled (or it timed out)." : (e && e.message) || "The passkey didn't work."); }
+  }
+  async function loginPasskey() {
+    try {
+      say("Waiting for your passkey...");
+      const o = await fetchApi("passkey", { action: "login_options" }); if (o.error) return say(o.error);
+      const cred = await navigator.credentials.get({ publicKey: { ...o, challenge: unb64(o.challenge) } });
+      const r = await fetchApi("passkey", { action: "login", credential: { id: cred.id, response: { clientDataJSON: b64(cred.response.clientDataJSON), authenticatorData: b64(cred.response.authenticatorData), signature: b64(cred.response.signature) } } });
+      after(r, "Logged in.");
+    } catch (e) { say(e && e.name === "NotAllowedError" ? "Passkey cancelled (or it timed out)." : (e && e.message) || "The passkey didn't work."); }
+  }
+
+  draw();
+  return { close, redraw: draw };
+}
