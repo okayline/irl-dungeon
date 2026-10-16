@@ -45,11 +45,12 @@
   <div class="frame"><pre id="screen">LOADING...</pre>
     <div id="save" class="viewpop" role="dialog" aria-modal="true" aria-label="Save codes and passkeys" hidden><pre></pre></div><div id="ver" class="ver"></div></div>
 <script type="module">
-  import FLOOR from "./floor.js";
   import { renderScreen, VERSION, WORD } from "./screen.js";
-  import { turn, step } from "./walk.js";
+  import { turn } from "./walk.js";
+  import { arrive, load, forward, turned } from "./play.js";
+  import FLOOR from "./floor.js";
   import { isCell, locate, neighbour } from "./place.js";
-  import { openSave } from "./account.js";
+  import { openSave, api } from "./account.js";
 
   const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "Pacific/Honolulu"; } })();
@@ -61,10 +62,11 @@
   const fromAddress = (new URLSearchParams(location.search).get("cell") || "").toLowerCase();
 
   let st = { tz, log: "" };
+  // Arriving builds the cell's floor at once, then asks the server for this player's doors in it (src/worker.js).
   function arriveAt(cell, log = "> You arrive.", facing) {
-    const floor = FLOOR.generate(FLOOR.seedFor(cell, 0), undefined, { days: FLOOR.DAYS });
-    const a = FLOOR.arrive(floor);
-    st = { tz, cell, floor, ...a, ...(facing ? { facing } : {}), log };
+    st = arrive(cell, { tz, log, ...(facing ? { facing } : {}) });
+    const here = st;
+    load(st, api).then(s => { if (st.cell === here.cell && st.floor === here.floor) { st = { ...s, at: st.at, visited: st.visited, facing: st.facing, log: s.log === here.log ? st.log : s.log }; draw(); } });
   }
   if (isCell(fromAddress)) arriveAt(fromAddress);
   else fetch("/api/here").then(r => r.json()).then(d => {
@@ -117,11 +119,17 @@
     const box = document.getElementById("save"); box.hidden = false; placeInView(box);
     savePanel = openSave(box, { onClose: () => { savePanel = null; } });
   }
+  let busy = false;      // one step at a time: a step may wait for the server
   function act(a) {
     if (a === "S") return openSavePanel(); if (a === "G") return where();
-    st = a === "W" ? step(st) : turn(st, a);
-    if (st.leave) { const dir = st.leave; arriveAt(neighbour(st.cell, dir), `> You walk out ${WORD[dir]}, into the next cell.`, dir); }
-    draw();
+    if (busy) return;
+    if (a !== "W") { st = turned(turn(st, a)); return draw(); }
+    busy = true;
+    forward(st, api).then(s => {
+      busy = false; st = s;
+      if (st.leave) { const dir = st.leave; arriveAt(neighbour(st.cell, dir), `> You walk out ${WORD[dir]}, into the next cell.`, dir); }
+      draw();
+    });
   }
   document.getElementById("screen").addEventListener("click", e => { const a = e.target.closest && e.target.closest("[data-act]"); if (a) act(a.dataset.act); });
   addEventListener("keydown", e => {

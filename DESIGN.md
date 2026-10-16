@@ -2,7 +2,7 @@
 
 4Dungeon in the real world. Every place on Earth is a cell; every cell is a dungeon that grows over time. 4Dungeon is the core game and the model: when this document is silent, do what 4Dungeon does.
 
-Status: **v0.03** (players, save codes, passkeys, the chained ledger, `public/floor.js`, and the page: 4Dungeon's screen and minimap on an empty-rooms floor, turn and walk only; on the server, the day's key, unlocking a door and first finders of a wing, which the page doesn't use yet).
+Status: **v0.03** (players, save codes, passkeys, the chained ledger, `public/floor.js`, and the page: 4Dungeon's screen and minimap on an empty-rooms floor, turn and walk only; the day's key, unlocking a door and first finders of a wing, played from the page through `public/play.js`).
 
 ## Settled
 
@@ -65,7 +65,7 @@ Trimmed from `daily-dungeon/floor.js` (43cebc2): wing layout and door/sealing co
 
 ## The screen
 
-`public/screen.js` is 4Dungeon's 80-column frame with only what this game has: the moon-and-date header, the 3D view, a right panel (cell id, wing, room, the minimap), three log lines (what is here, what you just did, what is ahead) and a keys line. Party, HP/MP, silver, ichor, breath, the title, sky, fights and bag are removed. The minimap is 4Dungeon's, without its locker and stairs marks. The page starts at `?cell=<id>` if given, or else at the server's rough guess (`GET /api/here`), and the player walks out of a start room into the next cell. Pressing L uses the browser's location instead, where allowed: `public/place.js` turns the position into a resolution-10 cell id with the vendored h3-js and drops the coordinates. In a start room the ahead line says "the way out, to the next cell" for a wall. The shared seed comes from `FLOOR.seedFor(cell, layer)` (FNV-1a, provisional). A locked door says it is locked: opening one needs the key, which needs the server.
+`public/screen.js` is 4Dungeon's 80-column frame with only what this game has: the moon-and-date header, the 3D view, a right panel (cell id, wing, room, the minimap), three log lines (what is here, what you just did, what is ahead) and a keys line. Party, HP/MP, silver, ichor, breath, the title, sky, fights and bag are removed. The minimap is 4Dungeon's, without its locker and stairs marks. The page starts at `?cell=<id>` if given, or else at the server's rough guess (`GET /api/here`), and the player walks out of a start room into the next cell. Pressing L uses the browser's location instead, where allowed: `public/place.js` turns the position into a resolution-10 cell id with the vendored h3-js and drops the coordinates. In a start room the ahead line says "the way out, to the next cell" for a wall. The shared seed comes from `FLOOR.seedFor(cell, layer)` (FNV-1a, provisional). A locked door says it is locked. Stepping into it asks first ("Unlock the west door? It uses today's key. Step again for yes."; any turn cancels), as 4Dungeon asks before a key is spent; a second step spends the key through the server. Arriving in a cell asks the server for the player's doors there and opens them. A wing whose rooms have all been stood in is reported once.
 
 The keys line also has `[S]AVE`, which opens a panel inside the 3D view (like 4Dungeon's bag): make or forget save codes (shown once), add or forget passkeys, log in with a code or a passkey, log out (the server only allows it once a way back exists).
 
