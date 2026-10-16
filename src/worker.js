@@ -20,7 +20,7 @@
 //   POST /api/cells {action: "save" | "forget", cell}   your saved cells (up to 20, listed in /api/account)
 //   POST /api/admin {action: "test", on, cell?}   admins only: test mode on (remembering the cell you're in) or off
 //                                     (answers `back`: that cell, to return to)
-//   POST /api/rooms {cell, room}      note that you stood in a room (the minimap's outline; private, nothing published)
+//   POST /api/rooms {cell, rooms:[...]}  the rooms you've stood in, sent in batches by the page (private, nothing published)
 //   POST /api/area {cell}             for the cell and the six around it: "new", "entered" or "cleared" (first wing walked)
 //   POST /api/walk {cell, visited}    the rooms you've stood in; any wing this completes is recorded, and its first finder sealed
 
@@ -261,18 +261,18 @@ const dayOf = (ctx, offset, last) => { try { return dayFor(ctx.t, offset, last);
 // no signatures, nothing on the ledger, and its doors live in test_unlocks, which only that admin's test floors read.
 const testing = (me) => !!(me && me.admin && me.test_mode);
 
-// POST /api/rooms {cell, room}: this player stood in that room. Only rooms the cell really has (given the doors they have
-// unlocked) are kept, and only where the cell earns credit; in test mode nothing is kept. A private note: a cell id and a
-// room number.
+// POST /api/rooms {cell, rooms: [room numbers]}: the rooms this player has stood in, sent in a batch by the page (every so often,
+// not on every step). Every room must be one the cell really has, given the doors the player has unlocked; up to 64 at once.
+// Only where the cell earns credit; in test mode nothing is kept. A private note: a cell id and room numbers.
 async function rooms(ctx) {
   const b = await body(ctx), { db, env, req } = ctx;
-  if (!(await rateLimit(env, req, "rooms", 3000, 3600))) throw new Oops("Too many tries. Try again later.", 429);
-  need(Number.isInteger(b.room) && b.room >= 0, "That isn't a room.");
+  if (!(await rateLimit(env, req, "rooms", 600, 3600))) throw new Oops("Too many tries. Try again later.", 429);
+  need(Array.isArray(b.rooms) && b.rooms.length >= 1 && b.rooms.length <= 64 && b.rooms.every((x) => Number.isInteger(x) && x >= 0), "Those aren't rooms.");
   const r = await theRun(ctx, b, false);
-  need(r.floor.rooms[b.room], "That room isn't built.");
+  need(b.rooms.every((x) => r.floor.rooms[x]), "A room there isn't built.");
   if (r.test) return { test: true };
   needCredit(r);
-  await db.prepare("INSERT OR IGNORE INTO walked_rooms (player_id, cell, layer, room, created_at) VALUES (?,?,?,?,?)").bind(r.me.id, b.cell, LAYER, b.room, sec(ctx.t)).run();
+  await db.batch([...new Set(b.rooms)].map((x) => db.prepare("INSERT OR IGNORE INTO walked_rooms (player_id, cell, layer, room, created_at) VALUES (?,?,?,?,?)").bind(r.me.id, b.cell, LAYER, x, sec(ctx.t))));
   return { ok: true };
 }
 
@@ -308,7 +308,7 @@ async function run(ctx) {
     .map((x) => ({ wing: x.wing_key, name: x.signed ? nameText(x.name_a, x.name_b) : null }));
   const mine = (await db.prepare("SELECT wing_key, signed FROM wing_firsts WHERE cell = ? AND layer = ? AND player_id = ?").bind(b.cell, LAYER, r.me.id).all()).results;
   const mineUnsigned = mine.filter((x) => !x.signed).map((x) => x.wing_key), mineSigned = mine.filter((x) => x.signed).map((x) => x.wing_key);
-  if (r.travel.ok) await db.prepare("INSERT OR IGNORE INTO walked_rooms (player_id, cell, layer, room, created_at) VALUES (?,?,?,0,?)").bind(r.me.id, b.cell, LAYER, sec(ctx.t)).run();   // arriving is standing in the first room
+  if (r.travel.ok) await db.prepare("INSERT OR IGNORE INTO walked_rooms (player_id, cell, layer, room, created_at) VALUES (?,?,?,0,?)").bind(r.me.id, b.cell, LAYER, sec(ctx.t)).run();   // arriving in a cell is noted (once per cell: the first room), so the AREA map can show it as entered
   const walked = (await db.prepare("SELECT room FROM walked_rooms WHERE player_id = ? AND cell = ? AND layer = ? ORDER BY room").bind(r.me.id, b.cell, LAYER).all()).results.map((x) => x.room);
   return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed, rooms: walked, keyReady, firsts, unsigned: mineUnsigned, signed: mineSigned, credit: r.travel.ok, ...(r.travel.ok ? {} : { waitSec: r.travel.waitSec }) };
 }

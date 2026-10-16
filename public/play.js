@@ -35,7 +35,7 @@ export async function load(st, api, offset = offsetNow()) {
   const firsts = Object.fromEntries((r.firsts || []).map((x) => [x.wing, x.name]));
   const visited = st.visited.slice();                       // the rooms the server says you've stood in (the first room too)
   for (const i of r.rooms || []) if (floor.rooms[i]) visited[i] = true;
-  const out = { ...st, visited, loaded: true, keyReady: r.keyReady, doors: r.unlocks.slice(), reported, credit: r.credit, firsts, unsigned: (r.unsigned || []).slice(), signed: (r.signed || []).slice(), test: !!r.test };
+  const out = { ...st, visited, sent: visited.slice(), loaded: true, keyReady: r.keyReady, doors: r.unlocks.slice(), reported, credit: r.credit, firsts, unsigned: (r.unsigned || []).slice(), signed: (r.signed || []).slice(), test: !!r.test };
   if (r.credit === false) out.log = `> You got here fast. This cell earns nothing for ${waitText(r.waitSec)}.`;
   return out;
 }
@@ -48,10 +48,7 @@ const wingKeyOf = (floor, doors, i) => ["0", ...doors.slice(0, i)].join(">");
 export async function forward(st, api, offset = offsetNow()) {
   const { unlock, search: wall, ...moved } = step(st);
   if (wall !== undefined) return searchWall({ ...moved, confirm: undefined }, wall, api, offset);
-  if (unlock === undefined) {
-    if (moved.at !== st.at && st.loaded) await ask(api, "rooms", { cell: st.cell, room: moved.at });      // the server keeps the rooms you've stood in
-    return report({ ...moved, confirm: undefined }, api);
-  }
+  if (unlock === undefined) return report({ ...moved, confirm: undefined }, api);
   const s = { ...moved, log: st.log };
   if (!s.loaded) return { ...s, confirm: undefined, log: "> The door won't move yet. Still opening this cell." };
   if (s.keyReady === false) return { ...s, confirm: undefined, log: "> The door won't unlock. Today's key is spent. Another comes tomorrow." };

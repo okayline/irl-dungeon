@@ -68,12 +68,26 @@
 
   let st = { tz, log: "" };
   // Arriving builds the cell's floor at once, then asks the server for this player's doors in it (src/worker.js).
+  // The rooms you walk are sent to the server in batches, never one per step: when you change wings, before you leave a cell,
+  // and when the page is closed or hidden. No timer. `st.sent` is what the server has.
+  function flushRooms(beacon) {
+    if (!st.floor || !st.loaded || !st.cell || st.test) return;
+    const sent = st.sent || [], rooms = st.visited.map((v, i) => (v && !sent[i] ? i : -1)).filter((i) => i >= 0).slice(0, 64);
+    if (!rooms.length) return;
+    const cell = st.cell, body = { cell, rooms };
+    st = { ...st, sent: (() => { const a = sent.slice(); rooms.forEach((i) => { a[i] = true; }); return a; })() };
+    if (beacon && navigator.sendBeacon) { navigator.sendBeacon("/api/rooms", new Blob([JSON.stringify(body)], { type: "application/json" })); return; }
+    api("rooms", body).then(r => { if (r && r.error && st.cell === cell) { const a = (st.sent || []).slice(); rooms.forEach((i) => { a[i] = false; }); st = { ...st, sent: a }; } }).catch(() => { if (st.cell === cell) { const a = (st.sent || []).slice(); rooms.forEach((i) => { a[i] = false; }); st = { ...st, sent: a }; } });
+  }
+  addEventListener("pagehide", () => flushRooms(true));
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushRooms(true); });
   function arriveAt(cell, log = "> You arrive.", facing, came) {
+    flushRooms(false);
     const zoom = st.zoom;
     st = arrive(cell, { tz, log, zoom, ...(facing ? { facing } : {}), ...(came ? { came } : {}) });
     if (zoom === "area") { const here = st; loadArea(st, api).then(s => { if (st.cell === here.cell) { st = { ...st, area: s.area }; draw(); } }); }
     const here = st;
-    load(st, api).then(s => { if (st.cell === here.cell && st.floor === here.floor) { const visited = st.visited.slice(); s.visited.forEach((v, i) => { if (v) visited[i] = true; }); st = { ...s, at: st.at, visited, facing: st.facing, zoom: st.zoom, area: st.area, log: s.log === here.log ? st.log : s.log }; draw(); } });
+    load(st, api).then(s => { if (st.cell === here.cell && st.floor === here.floor) { const visited = st.visited.slice(); s.visited.forEach((v, i) => { if (v) visited[i] = true; }); st = { ...s, at: st.at, visited, sent: s.sent, facing: st.facing, zoom: st.zoom, area: st.area, log: s.log === here.log ? st.log : s.log }; draw(); } });
   }
   if (isCell(fromAddress)) arriveAt(fromAddress);
   else fetch("/api/here").then(r => r.json()).then(d => {
@@ -171,8 +185,10 @@
     if (a === "Y" || a === "U") { busy = true; return (a === "Y" ? signHere : unsignHere)(st, api).then(s => { busy = false; st = s; draw(); }); }
     if (a !== "W") { st = turned(turn(st, a)); return draw(); }
     busy = true;
+    const wingBefore = st.floor && st.floor.rooms[st.at] ? st.floor.rooms[st.at].wing : null;
     forward(st, api).then(s => {
       busy = false; st = s;
+      if (st.floor && st.floor.rooms[st.at] && st.floor.rooms[st.at].wing !== wingBefore) flushRooms(false);
       if (st.popup) { const item = st.popup; st = { ...st, popup: undefined }; showFound(item); }
       if (st.zoom === "area" && !st.leave) loadArea(st, api).then(s => { if (s.cell === st.cell) { st = { ...st, area: s.area }; draw(); } });     // a wing walked in full changes the marks
       if (st.leave) return walkOut(st.leave);

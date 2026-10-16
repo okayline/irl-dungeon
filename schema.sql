@@ -193,7 +193,8 @@ CREATE TABLE IF NOT EXISTS finds (
 );
 CREATE INDEX IF NOT EXISTS finds_by_player ON finds (player_id, id);
 
--- The rooms a player has stood in (migrations/008). Private: never published, never on the ledger.
+-- The rooms a player has stood in (migrations/008). Room 0 is written when they open a cell that earns credit; the page sends
+-- the others in batches (POST /api/rooms), so a reload keeps a half-walked wing. Private: never published, never on the ledger.
 CREATE TABLE IF NOT EXISTS walked_rooms (
   player_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   cell        TEXT NOT NULL,

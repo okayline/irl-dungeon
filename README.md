@@ -28,7 +28,7 @@ npx wrangler dev
 - `src/travel.js`: the travel check (claims that would need impossible travel earn nothing for a while).
 - `src/saves.js`, `src/passkeys.js`: save codes and passkeys, copied from dawn-baton.
 - `src/items.js`: reads the shared item table (D1 `items-db`, bound as `ITEMS`; repo okayline/dungeon-items), read only.
-- `src/worker.js` also keeps `walked_rooms` (private: the rooms a player has stood in; POST /api/rooms) and answers POST /api/area (new / entered / cleared for a cell and the six around it). `public/area.js` draws the zoomed-out AREA map from that.
+- `src/worker.js` also keeps `walked_rooms` (private: the rooms a player has stood in, sent in batches by the page; POST /api/rooms) and answers POST /api/area (new / entered / cleared for a cell and the six around it). `public/area.js` draws the zoomed-out AREA map from that.
 - `src/copies.js`: numbers each find through the copy registry (the `Registry` entrypoint of the dungeon-items Worker, bound as `REGISTRY`). A find is saved first and numbered a moment later; one the registry couldn't number waits (`copy` empty) and is numbered on the next `/api/finds` or repeat search. Locally, `wrangler dev` needs the dungeon-items Worker running too; without it finds stay unnumbered.
 - `src/search.js`, `src/deal.js`: what each room hides each day (copied from 4Dungeon's search), and the shuffled per-room-day decks that decide who gets which item.
 - `public/found.js`, `public/invoke.js`: the "You found X!" window and the [I]NVOKE list.

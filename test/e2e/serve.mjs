@@ -8,6 +8,7 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost:8790");
   if (url.pathname.startsWith("/api/")) {
     const chunks = []; for await (const c of req) chunks.push(c);
+    if (process.env.LAG) await new Promise((r) => setTimeout(r, Number(process.env.LAG)));     // LAG=2000 makes every answer take 2 s, to feel a slow server
     const headers = { ...req.headers, "cf-connecting-ip": "127.0.0.1" };
     const r = await worker.fetch(new Request(url, { method: req.method, headers, body: ["GET", "HEAD"].includes(req.method) ? undefined : Buffer.concat(chunks) }), env);
     const out = {}; r.headers.forEach((v, k) => { out[k] = v; });

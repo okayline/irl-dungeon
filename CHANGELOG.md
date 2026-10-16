@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.19 - Quick Feet - Oct 15 2026, 11:30 PM HST
+
+- **Walking is quick again.** Since v0.14 every step into a room waited for the server to save it before the step finished, which made each click take seconds. The rooms you walk are now saved in batches (when you change wings, before you leave a cell, and when you close or hide the page; no timer), never one per click, so a half-walked wing survives a reload.
+
 ## v0.18 - A Beat - Oct 15 2026, 11:40 PM HST
 
 - **Walking out takes a beat.** Leaving a cell, the line comes up "You walk out north, along the hallway" and three dots appear one after another, then a full stop, and then you're in the next cell, as the dots after a search do in 4Dungeon.
@@ -22,7 +26,7 @@ Times are Hawaii time (HST). Newest first.
 
 ## v0.14 - Area - Oct 15 2026, 11:12 PM HST
 
-- **The map remembers on the server.** The rooms you've stood in are kept with your account, so the outline follows you to any device, and coming back to a cell shows where you've been.
+- **The map remembers the cells you've been in.** The cells you've arrived in are kept with your account, so the area map's marks follow you to any device.
 - **Zoom the map.** Press `+` or `-` (or click the button on the map's title) to switch between the room map and an AREA map. The area map has north always up: you in the middle, and along each way out of the first room the next cell, joined by a hallway. A cell shows `[ ]` if it's new, `[.]` if you've stood in it, `[o]` if you've walked its whole first wing.
 
 ## v0.13 - Hallways - Oct 15 2026, 11:06 PM HST
