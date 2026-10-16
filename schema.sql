@@ -1,0 +1,77 @@
+-- irl-dungeon database (Cloudflare D1)
+--   npx wrangler d1 create irl-dungeon-db            (paste the id into wrangler.jsonc)
+--   npx wrangler d1 execute irl-dungeon-db --remote --file=schema.sql
+--
+-- Foundation only: players, the ledger, and the ways back in. Game tables arrive with the game, each with a
+-- migration in migrations/ and an update here.
+
+-- A player is a browser cookie (only the token's SHA-256 is stored). No name, no location, no email.
+CREATE TABLE IF NOT EXISTS players (
+  id          INTEGER PRIMARY KEY,
+  token_hash  TEXT NOT NULL UNIQUE,
+  created_at  INTEGER NOT NULL,
+  seen_at     INTEGER NOT NULL
+);
+
+-- THE LEDGER: one SHA-256 hash chain over everything the game seals, in the order sealed.
+--   hash = SHA-256(prev_hash + "|" + record), the first entry chains from 64 zeros.
+-- prev_hash is UNIQUE, so two entries can never build on the same parent: the chain can't fork, and two writers
+-- racing for the head can't both win. Changing any old record breaks every hash after it.
+-- player_id is kept here for the game's own use and is never published; the sealed record never holds a name.
+CREATE TABLE IF NOT EXISTS ledger (
+  id          INTEGER PRIMARY KEY,
+  kind        TEXT NOT NULL,
+  player_id   INTEGER,
+  record      TEXT NOT NULL,          -- the sealed JSON record
+  prev_hash   TEXT NOT NULL UNIQUE,
+  hash        TEXT NOT NULL UNIQUE,
+  created_at  INTEGER NOT NULL
+);
+
+-- extra devices a player is loaded on (the first device keeps using players.token_hash)
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash  TEXT PRIMARY KEY,         -- SHA-256 of the cookie token
+  player_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  created_at  INTEGER NOT NULL,
+  seen_at     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_player ON sessions (player_id);
+
+-- save codes like K7QM-2XPA-9RTD-HV4C-8NBE; only their hash is stored (up to 5 per player)
+CREATE TABLE IF NOT EXISTS save_codes (
+  id            INTEGER PRIMARY KEY,
+  player_id     INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  code_hash     TEXT NOT NULL UNIQUE,
+  created_at    INTEGER NOT NULL,
+  last_used_at  INTEGER
+);
+CREATE INDEX IF NOT EXISTS save_codes_player ON save_codes (player_id);
+
+-- passkeys (WebAuthn): the public half of each key
+CREATE TABLE IF NOT EXISTS passkeys (
+  id            INTEGER PRIMARY KEY,
+  player_id     INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  cred_id       TEXT NOT NULL UNIQUE,
+  public_key    TEXT NOT NULL,          -- JWK
+  alg           INTEGER NOT NULL,       -- -7 ES256, -257 RS256
+  sign_count    INTEGER NOT NULL DEFAULT 0,
+  label         TEXT,
+  created_at    INTEGER NOT NULL,
+  last_used_at  INTEGER
+);
+CREATE INDEX IF NOT EXISTS passkeys_player ON passkeys (player_id);
+
+CREATE TABLE IF NOT EXISTS passkey_challenges (
+  challenge   TEXT PRIMARY KEY,
+  player_id   INTEGER,
+  kind        TEXT NOT NULL,            -- register | login
+  expires_at  INTEGER NOT NULL
+);
+
+-- slows down guessing save codes and making players
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key           TEXT NOT NULL,
+  window_start  INTEGER NOT NULL,
+  count         INTEGER NOT NULL,
+  PRIMARY KEY (key, window_start)
+);
