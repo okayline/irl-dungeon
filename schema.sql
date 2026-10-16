@@ -5,13 +5,17 @@
 -- Foundation only: players, the ledger, and the ways back in. Game tables arrive with the game, each with a
 -- migration in migrations/ and an update here.
 
--- A player is a browser cookie (only the token's SHA-256 is stored). No name, no location, no email.
+-- A player is a browser cookie (only the token's SHA-256 is stored). No location, no email. A name (two word ids from
+-- src/names.js, a unique pair) only once they sign a find.
 CREATE TABLE IF NOT EXISTS players (
   id          INTEGER PRIMARY KEY,
   token_hash  TEXT NOT NULL UNIQUE,
   created_at  INTEGER NOT NULL,
-  seen_at     INTEGER NOT NULL
+  seen_at     INTEGER NOT NULL,
+  name_a      TEXT,
+  name_b      TEXT
 );
+CREATE UNIQUE INDEX IF NOT EXISTS players_name ON players (name_a, name_b) WHERE name_a IS NOT NULL;
 
 -- THE LEDGER: one SHA-256 hash chain over everything the game seals, in the order sealed.
 --   hash = SHA-256(prev_hash + "|" + record), the first entry chains from 64 zeros.
@@ -116,6 +120,7 @@ CREATE TABLE IF NOT EXISTS wing_firsts (
   wing_key    TEXT NOT NULL,
   player_id   INTEGER NOT NULL REFERENCES players(id),
   created_at  INTEGER NOT NULL,
+  signed      INTEGER NOT NULL DEFAULT 0,        -- 1 once the finder has signed it (src/worker.js sign)
   PRIMARY KEY (cell, layer, wing_key)
 );
 
@@ -125,4 +130,12 @@ CREATE TABLE IF NOT EXISTS places (
   player_id   INTEGER PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
   cell        TEXT NOT NULL,
   at          INTEGER NOT NULL
+);
+
+-- Cells a player saved, to come back to (up to 20). Private: never published.
+CREATE TABLE IF NOT EXISTS saved_cells (
+  player_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  cell        TEXT NOT NULL,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (player_id, cell)
 );

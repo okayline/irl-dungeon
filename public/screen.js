@@ -231,7 +231,7 @@ function renderScreen(st, now) {
     " " + (st.cell || "NONE").slice(0, PW - 2),
     d ? ` WING ${d.room.wing + 1}   ${here}` : "",
     d ? ` ${f.wings.length} WING${f.wings.length === 1 ? "" : "S"} BUILT` : "",
-    "", rule, "", mapHead, ...map, "", rule, d ? ` ROOM ${st.at + 1}` : "",
+    d ? (st.first || "") : "", rule, "", mapHead, ...map, "", rule, d ? ` ROOM ${st.at + 1}` : "",
   ];
   for (let i = 0; i < 17; i++) S.push("|" + ljust(view[i], 47) + "|" + ljust(stat[i] || "", 30) + "|");
   S.push("+" + "=".repeat(78) + "+");

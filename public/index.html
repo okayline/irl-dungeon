@@ -35,7 +35,9 @@
   .viewpop pre { white-space: pre-wrap; display: flex; flex-direction: column; min-height: 100%; margin: 0; }
   .viewpop pre > div { flex: none; }
   .viewpop .top { position: sticky; top: 0; background: var(--bg); }
-  .viewpop .foot { margin-top: auto; position: sticky; bottom: 0; background: var(--bg); }
+  .viewpop .foot { margin-top: auto; }
+  .viewpop .foot.on { position: sticky; bottom: 0; background: var(--bg); }
+  .viewpop .code { -webkit-user-select: text; user-select: text; }
   .viewpop .btn { display: inline-block; }
   .codebox { font: inherit; background: var(--bg); color: var(--fg); border: 1px solid var(--trail); width: 26ch; padding: 0 4px; text-transform: uppercase; }
   .cell .g { font-family: "DejaVu Sans Mono", Menlo, Consolas, "Segoe UI Symbol", monospace; line-height: 0; }
@@ -47,7 +49,7 @@
 <script type="module">
   import { renderScreen, VERSION, WORD } from "./screen.js";
   import { turn } from "./walk.js";
-  import { arrive, load, forward, turned } from "./play.js";
+  import { arrive, load, forward, turned, firstLine, signHere } from "./play.js";
   import FLOOR from "./floor.js";
   import { isCell, locate, neighbour } from "./place.js";
   import { openSave, api } from "./account.js";
@@ -93,7 +95,7 @@
       if (i >= 6 && i <= 22) {
         const l = line.slice(0, 49), r = line.slice(49);
         const L = esc(l).replace("[ &lt; ]", '<span class="btn" data-act="L">[ &lt; ]</span>').replace("[ &gt; ]", '<span class="btn" data-act="R">[ &gt; ]</span>').replace("[  ^  ]", '<span class="btn" data-act="W">[  ^  ]</span>');
-        const R = esc(r).replace("@", '<span class="you">@</span>').replace(/#/g, '<span class="door">#</span>');
+        const R = esc(r).replace("[Y] SIGN IT", '<span class="btn" data-act="Y">[Y] SIGN IT</span>').replace("@", '<span class="you">@</span>').replace(/#/g, '<span class="door">#</span>');
         return L + R;
       }
       if (i === 28) return boxed(esc(line)).replace("[L]OCATE", '<span class="btn" data-act="G">[L]OCATE</span>').replace("[S]AVE", '<span class="btn" data-act="S">[S]AVE</span>');
@@ -102,7 +104,7 @@
   }
 
   function draw() {
-    if (st.floor) st.map = FLOOR.minimap(st.floor, st);
+    if (st.floor) { st.map = FLOOR.minimap(st.floor, st); st.first = firstLine(st); }
     document.getElementById("screen").innerHTML = colorize(renderScreen(st, new Date()));
   }
   let savePanel = null;
@@ -117,12 +119,13 @@
   function openSavePanel() {
     if (saveOpen()) return;
     const box = document.getElementById("save"); box.hidden = false; placeInView(box);
-    savePanel = openSave(box, { onClose: () => { savePanel = null; } });
+    savePanel = openSave(box, { onClose: () => { savePanel = null; }, cell: () => st.cell || null, onGo: (c) => { arriveAt(c, "> You go to a saved cell."); draw(); } });
   }
   let busy = false;      // one step at a time: a step may wait for the server
   function act(a) {
     if (a === "S") return openSavePanel(); if (a === "G") return where();
     if (busy) return;
+    if (a === "Y") { busy = true; return signHere(st, api).then(s => { busy = false; st = s; draw(); }); }
     if (a !== "W") { st = turned(turn(st, a)); return draw(); }
     busy = true;
     forward(st, api).then(s => {
@@ -134,7 +137,7 @@
   document.getElementById("screen").addEventListener("click", e => { const a = e.target.closest && e.target.closest("[data-act]"); if (a) act(a.dataset.act); });
   addEventListener("keydown", e => {
     if (saveOpen()) { if (e.key === "Escape" && savePanel) savePanel.close(); return; }     // the SAVE panel has the keyboard
-    const k = { ArrowLeft: "L", a: "L", A: "L", ArrowRight: "R", d: "R", D: "R", ArrowUp: "W", w: "W", W: "W", l: "G", L: "G", s: "S", S: "S" }[e.key];
+    const k = { ArrowLeft: "L", a: "L", A: "L", ArrowRight: "R", d: "R", D: "R", ArrowUp: "W", w: "W", W: "W", l: "G", L: "G", s: "S", S: "S", y: "Y", Y: "Y" }[e.key];
     if (k && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); act(k); }
   });
   document.getElementById("ver").textContent = VERSION;

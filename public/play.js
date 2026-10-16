@@ -32,7 +32,8 @@ export async function load(st, api, offset = offsetNow()) {
   for (const d of r.unlocks) if (!floor.rooms[d] && FLOOR.growDoor(floor, d) === undefined) return { ...st, log: "> This cell's doors don't add up. Locked doors can't open right now." };
   // wings already walked count as reported, so they aren't sent again
   const reported = floor.wings.map((w, i) => (r.completed.includes(wingKeyOf(floor, r.unlocks, i)) ? i : -1)).filter((i) => i >= 0);
-  const out = { ...st, loaded: true, keyReady: r.keyReady, doors: r.unlocks.slice(), reported, credit: r.credit };
+  const firsts = Object.fromEntries((r.firsts || []).map((x) => [x.wing, x.name]));
+  const out = { ...st, loaded: true, keyReady: r.keyReady, doors: r.unlocks.slice(), reported, credit: r.credit, firsts, unsigned: (r.unsigned || []).slice() };
   if (r.credit === false) out.log = `> You got here fast. This cell earns nothing for ${waitText(r.waitSec)}.`;
   return out;
 }
@@ -65,8 +66,34 @@ async function report(st, api) {
   const visited = st.visited.map((v, i) => (v ? i : -1)).filter((i) => i >= 0);
   const r = await ask(api, "walk", { cell: st.cell, visited });
   if (r.error) return { ...st, reported: [...st.reported, ...fresh], log: "> " + r.error };   // said once, not on every step
-  const out = { ...st, reported: [...st.reported, ...fresh] };
+  const out = { ...st, reported: [...st.reported, ...fresh], firsts: { ...(st.firsts || {}) }, unsigned: (st.unsigned || []).slice() };
+  for (const w of r.wings) if (w.first) { out.firsts[w.key] = null; out.unsigned.push(w.key); }
   const first = r.wings.some((w) => w.first);
-  if (r.wings.length) out.log = first ? "> You're the first to walk this whole wing. It's sealed in the ledger." : "> You've walked this whole wing.";
+  if (r.wings.length) out.log = first ? "> You're the first to walk this whole wing! Press Y to sign it with your name." : "> You've walked this whole wing.";
   return out;
+}
+
+// The key of the wing you're standing in, or null.
+export function wingHere(st) {
+  if (!st.floor || !st.loaded) return null;
+  const room = st.floor.rooms[st.at];
+  return room ? wingKeyOf(st.floor, st.doors || [], room.wing) : null;
+}
+
+// The right panel's "first" line for the wing you're in: who found it first, if anyone has.
+export function firstLine(st) {
+  const k = wingHere(st);
+  if (k === null || !st.firsts || !(k in st.firsts)) return "";
+  if (st.firsts[k]) return " FIRST: " + st.firsts[k].toUpperCase();
+  return (st.unsigned || []).includes(k) ? " FIRST: YOU   [Y] SIGN IT" : " FIRST: UNSIGNED";
+}
+
+// Sign the wing you're standing in, if you found it first and haven't signed it. Your name is made then if you have
+// none (two words; reroll it in SAVE).
+export async function signHere(st, api) {
+  const k = wingHere(st);
+  if (k === null || !(st.unsigned || []).includes(k)) return st;
+  const r = await ask(api, "sign", { cell: st.cell, wing: k });
+  if (r.error) return { ...st, log: "> " + r.error };
+  return { ...st, firsts: { ...st.firsts, [k]: r.name }, unsigned: st.unsigned.filter((x) => x !== k), log: `> Signed. This wing was found first by ${r.name}.` };
 }

@@ -10,8 +10,8 @@ export const cellFromLatLng = (lat, lng) => {
   return latLngToCell(lat, lng, RES);
 };
 
-// Is this string a real cell id at our resolution?
-export const isCell = (s) => typeof s === "string" && isValidCell(s) && getResolution(s) === RES;
+// Is this string a real cell id at our resolution, written the one way (lowercase), so a cell has a single spelling?
+export const isCell = (s) => typeof s === "string" && /^[0-9a-f]{15}$/.test(s) && isValidCell(s) && getResolution(s) === RES;
 
 // The server's rough first guess (src/worker.js, GET /api/here). Cloudflare puts an approximate position on every request,
 // worked out from the IP address (often wrong by kilometres). It is turned into the ~1 km area around it (resolution 7)

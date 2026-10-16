@@ -15,9 +15,10 @@ export async function api(path, body) {
 const deviceLabel = () => { const ua = navigator.userAgent; return /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iPhone" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows PC" : "This device"; };
 
 // Draws the panel into `root` (a div over the frame). `onChange()` is called after a login or logout, so the page can
-// refresh; `onClose()` when the player closes it.
-export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchApi = api } = {}) {
-  let newCode = null, msg = "";
+// refresh; `onClose()` when the player closes it. `cell()` is the cell you're in (for SAVE THIS CELL); `onGo(cell)`
+// takes you to a saved one.
+export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchApi = api, cell = () => null, onGo = () => {} } = {}) {
+  let newCode = null, msg = "", last = null, copied = false;
   const pre = root.querySelector("pre");
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
   const line = (text = "", cls) => { const d = el("div", cls, text || " "); pre.appendChild(d); return d; };
@@ -26,21 +27,39 @@ export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchA
 
   // Text is laid out for 45 columns: this panel sits inside the 3D view (47 columns, 17 rows) and scrolls. The title
   // row stays at the top and the message row stays at the foot, as in 4Dungeon's bag.
+  // The panel opens at once with what it showed last (or "Loading..."), and fills in when the server answers.
   async function draw() {
+    paint(last);
     const a = await fetchApi("account");
+    if (root.hidden) return;                                     // closed while waiting
+    last = a; paint(a);
+  }
+  function paint(a) {
+    const top = root.scrollTop;
     pre.textContent = "";
     root.hidden = false;
     row(" SAVE", " ".repeat(26), button("CLOSE", close)).className = "top";
     line(" " + "-".repeat(43));
+    if (!a) { line(" Loading...", "dim"); return; }
     if (a.error) { line(" " + a.error); return; }
     if (newCode) {
       line(" YOUR NEW SAVE CODE (shown once)", "gold");
       line("   " + newCode, "gold code");
       line(" Write it down. It can't be shown again.");
-      row("   ", button("DOWNLOAD AS A TEXT FILE", download));
-      row("   ", button("DONE", () => { newCode = null; draw(); }));
+      row("   ", button(copied ? "COPIED" : "COPY", copyCode), "  ", button("DOWNLOAD AS A TEXT FILE", download));
+      row("   ", button("DONE", () => { newCode = null; copied = false; msg = ""; paint(last); }));
       line();
     }
+    line(" NAME");
+    if (a.name) { row("   " + a.name + "  ", button("REROLL", reroll)); line("   Shown on finds you sign, with their cell.", "dim"); }
+    else line("   None yet. Sign a find to get one.", "dim");
+    line();
+    const here = cell();
+    line(` SAVED CELLS (${a.cells.length}/20)`);
+    for (const c of a.cells) row(`   ${c.cell}${c.cell === here ? " *" : "  "} `, button("GO", () => { close(); onGo(c.cell); }), " ", button("FORGET", () => forgetCell(c.cell)));
+    if (!a.cells.length) line("   None yet.", "dim");
+    if (here && !a.cells.some((c) => c.cell === here)) row("   ", button("SAVE THIS CELL", () => saveCell(here)));
+    line();
     line(` SAVE CODES (${a.codes.length}/5)`);
     for (const c of a.codes) row(`   made ${monthDay(c.created_at)}${c.last_used_at ? ", used " + monthDay(c.last_used_at) : ""}  `, button("FORGET", () => forget("codes", c.id)));
     if (!a.codes.length) line("   None yet.", "dim");
@@ -62,13 +81,22 @@ export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchA
     if (a.codes.length || a.passkeys.length) row(" ", button("LOG OUT OF THIS BROWSER", logout));
     line();
     line(a.player ? ` Saved on ${a.devices} device${a.devices === 1 ? "" : "s"}.` : " No player yet. A code or passkey makes one.", "dim");
-    line(msg ? " " + msg : "", "msg foot");
+    line(msg ? " " + msg : "", "msg foot" + (msg ? " on" : ""));
+    root.scrollTop = top;
   }
 
-  const say = (t) => { msg = t; const m = pre.querySelector(".msg"); if (m) m.textContent = " " + t; };
+  // The message row is pinned to the foot only while it says something (an empty pinned row hid what scrolled under it).
+  const say = (t) => { msg = t; const m = pre.querySelector(".msg"); if (m) { m.textContent = " " + (t || ""); m.classList.toggle("on", !!t); } };
   const close = () => { root.hidden = true; pre.textContent = ""; onClose(); };
   async function after(r, ok) { if (r.error) return say(r.error); if (ok) msg = ok; draw(); onChange(); }
 
+  async function copyCode() {
+    try { await navigator.clipboard.writeText(newCode); copied = true; paint(last); say("Copied. Keep it somewhere safe."); }
+    catch { const c = pre.querySelector(".code"); if (c) { const r = document.createRange(); r.selectNodeContents(c); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } say("Couldn't copy. The code is selected: copy it by hand."); }
+  }
+  async function reroll() { const r = await fetchApi("name", { action: "reroll" }); if (r.error) return say(r.error); msg = "Your name is now " + r.name + "."; draw(); }
+  async function saveCell(c) { const r = await fetchApi("cells", { action: "save", cell: c }); if (r.error) return say(r.error); msg = "Saved."; draw(); }
+  async function forgetCell(c) { const r = await fetchApi("cells", { action: "forget", cell: c }); if (r.error) return say(r.error); msg = "Forgotten."; draw(); }
   async function makeCode() { const r = await fetchApi("codes", { action: "new" }); if (r.error) return say(r.error); newCode = r.code; msg = ""; draw(); onChange(); }
   async function forget(path, id) { const r = await fetchApi(path, { action: "remove", id }); if (r.error) return say(r.error); msg = "Forgotten."; draw(); }
   async function useCode(code) { if (!code.trim()) return say("Type your save code first."); after(await fetchApi("load", { code }), "Logged in."); }

@@ -2,14 +2,14 @@
 
 4Dungeon in the real world: every ~100 m cell is a dungeon that grows over time. One key a day opens one locked door; everything else is free to explore.
 
-**Status: v0.03.** The page shows a cell's floor (empty rooms) on 4Dungeon's screen with its minimap, and you can turn and walk through open doors. Everyone sees the same floor in a cell. Step into a locked door twice (it asks first) to spend the day's key on it; walk every room of a wing and the first to do so is sealed on the ledger. Your doors are kept on the server, so they come back on reload and on your other devices. Underneath is cookie players, save codes, passkeys, and a chained, tamper-evident ledger. See `DESIGN.md` for what is settled and what is open.
+**Status: v0.03.** The page shows a cell's floor (empty rooms) on 4Dungeon's screen with its minimap, and you can turn and walk through open doors. Everyone sees the same floor in a cell. Step into a locked door twice (it asks first) to spend the day's key on it; walk every room of a wing and the first to do so is sealed on the ledger. Your doors are kept on the server, so they come back on reload and on your other devices. A first find can be signed with a two-word name (rerollable), and cells can be saved in [S]AVE. Underneath is cookie players, save codes, passkeys, and a chained, tamper-evident ledger. See `DESIGN.md` for what is settled and what is open.
 
 Live at **https://irl.88x31.app** (a custom domain on the `irl-dungeon` Worker).
 
 ## Run it
 
 ```
-npm test                  # 142 tests (Node 22+, built-in SQLite standing in for D1)
+npm test                  # 153 tests (Node 22+, built-in SQLite standing in for D1)
 npx wrangler d1 create irl-dungeon-db     # paste the id into wrangler.jsonc
 npx wrangler d1 execute irl-dungeon-db --local --file=schema.sql
 npx wrangler dev
@@ -24,6 +24,7 @@ npx wrangler dev
 - `public/play.js`: the page's side of the game: opening a cell (your doors from the server), asking before the key is spent, unlocking, and reporting a wing walked in full.
 - `public/account.js`: the SAVE panel (save codes and passkeys), inside the 3D view; press S. `test/e2e/save.py` checks it in a real browser against the real Worker (run by hand; needs python3 playwright).
 - `public/place.js`, `public/vendor/`: position to cell id (the coordinates are dropped at once), the server's rough guess, the next cell over, and Uber's h3-js (Apache-2.0).
+- `src/names.js`: the two-word names (dawn-baton's lists).
 - `src/travel.js`: the travel check (claims that would need impossible travel earn nothing for a while).
 - `src/saves.js`, `src/passkeys.js`: save codes and passkeys, copied from dawn-baton.
 - `schema.sql`: the database tables.

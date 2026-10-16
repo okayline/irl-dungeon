@@ -14,12 +14,16 @@
 //   POST /api/run {cell, offset?}     open a cell: the doors you've unlocked, the wings you've finished, whether today's key is
 //                                     ready, and whether the cell earns credit (the travel check, src/travel.js)
 //   POST /api/unlock {cell, door, offset}   spend today's key on a locked door (one a day, by your local day)
+//   POST /api/sign {cell, wing}       sign a wing you found first with your name (makes your name if you have none)
+//   POST /api/name {action: "reroll"} a new two-word name (only once you have one)
+//   POST /api/cells {action: "save" | "forget", cell}   your saved cells (up to 20, listed in /api/account)
 //   POST /api/walk {cell, visited}    the rooms you've stood in; any wing this completes is recorded, and its first finder sealed
 
 import { GENESIS, sha256, verifyChain, head, chainInserts, isUnique, chainClash } from "./ledger.js";
 import FLOOR from "../public/floor.js";
 import { isCell, guessCell } from "../public/place.js";
 import { travelCheck, waitText } from "./travel.js";
+import { nameText, freeName } from "./names.js";
 import { LAYER, buildFloor, wingKey, finishedWings } from "./game.js";
 import { localDay, dayFor, offsetCheck, BadOffset } from "./day.js";
 import { MAX_CODES, newSaveCode, hashCode, newSession, newToken, rateLimit } from "./saves.js";
@@ -39,7 +43,7 @@ const ROUTES = {
   "GET /api/account": account, "POST /api/codes": codes, "POST /api/load": loadCode,
   "POST /api/passkey": passkey, "POST /api/logout": logout,
   "GET /api/ledger": ledger, "GET /api/here": here, "GET /api/verify": verify,
-  "POST /api/run": run, "POST /api/unlock": unlock, "POST /api/walk": walk,
+  "POST /api/run": run, "POST /api/sign": sign, "POST /api/name": rename, "POST /api/cells": cells, "POST /api/unlock": unlock, "POST /api/walk": walk,
 };
 
 export default {
@@ -125,12 +129,13 @@ async function verify(ctx) {
 
 async function account(ctx) {
   const me = await player(ctx);
-  if (!me) return { player: false, codes: [], passkeys: [], devices: 0 };
+  if (!me) return { player: false, codes: [], passkeys: [], devices: 0, name: null, cells: [] };
   const { db } = ctx;
   const codes = (await db.prepare("SELECT id, created_at, last_used_at FROM save_codes WHERE player_id = ? ORDER BY id").bind(me.id).all()).results;
   const passkeys = (await db.prepare("SELECT id, label, created_at, last_used_at FROM passkeys WHERE player_id = ? ORDER BY id").bind(me.id).all()).results;
   const devices = 1 + (await db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE player_id = ?").bind(me.id).first()).n;
-  return { player: true, codes, passkeys, devices };
+  const saved = (await db.prepare("SELECT cell, created_at FROM saved_cells WHERE player_id = ? ORDER BY created_at, cell").bind(me.id).all()).results;
+  return { player: true, codes, passkeys, devices, name: nameText(me.name_a, me.name_b), cells: saved };
 }
 
 async function codes(ctx) {
@@ -245,7 +250,11 @@ async function run(ctx) {
   const last = await lastKeyDay(ctx, r.me);
   // keyReady is only worked out when the page says what time zone offset it is on
   const keyReady = b.offset === undefined ? null : dayOf(ctx, b.offset, last) > (last ?? -Infinity);
-  return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed, keyReady, credit: r.travel.ok, ...(r.travel.ok ? {} : { waitSec: r.travel.waitSec }) };
+  // who found this cell's wings first: a name only where the finder signed (never an id)
+  const firsts = (await db.prepare("SELECT f.wing_key, f.signed, p.name_a, p.name_b FROM wing_firsts f JOIN players p ON p.id = f.player_id WHERE f.cell = ? AND f.layer = ?").bind(b.cell, LAYER).all()).results
+    .map((x) => ({ wing: x.wing_key, name: x.signed ? nameText(x.name_a, x.name_b) : null }));
+  const mineUnsigned = (await db.prepare("SELECT wing_key FROM wing_firsts WHERE cell = ? AND layer = ? AND player_id = ? AND signed = 0").bind(b.cell, LAYER, r.me.id).all()).results.map((x) => x.wing_key);
+  return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed, keyReady, firsts, unsigned: mineUnsigned, credit: r.travel.ok, ...(r.travel.ok ? {} : { waitSec: r.travel.waitSec }) };
 }
 
 async function unlock(ctx) {
@@ -302,4 +311,72 @@ async function recordWing(ctx, me, cell, w) {
     }
   }
   throw new Oops("The ledger is busy. Try again.", 503);
+}
+
+// ---------- names, signing, saved cells ----------
+
+const MAX_SAVED = 20;
+
+// Give a player a free two-word name if they have none. Returns the name text.
+async function ensureName(ctx, me) {
+  if (me.name_a) return nameText(me.name_a, me.name_b);
+  return setFreeName(ctx, me, null);
+}
+async function setFreeName(ctx, me, except) {
+  for (let i = 0; i < 5; i++) {
+    const n = await freeName(ctx.db, except);
+    if (!n) break;
+    try { await ctx.db.prepare("UPDATE players SET name_a = ?, name_b = ? WHERE id = ?").bind(n.a, n.b, me.id).run(); return nameText(n.a, n.b); }
+    catch (e) { if (!isUnique(e)) throw e; }                    // someone took it a moment ago: try another
+  }
+  throw new Oops("Couldn't find a free name. Try again.", 503);
+}
+
+// Sign a wing you found first. The signing is sealed on the ledger (cell, layer, wing; never the name), in the same
+// batch as the change. The name shown is looked up when shown, so a reroll renames past signatures too.
+async function sign(ctx) {
+  const b = await body(ctx), { db } = ctx;
+  need(isCell(b.cell), "That isn't a cell.");
+  need(typeof b.wing === "string" && /^0(>\d{1,4}){0,12}$/.test(b.wing), "That isn't a wing.");
+  const me = await must(ctx);
+  const row = await db.prepare("SELECT player_id, signed FROM wing_firsts WHERE cell = ? AND layer = ? AND wing_key = ?").bind(b.cell, LAYER, b.wing).first();
+  need(row && row.player_id === me.id, "Only the first to walk a wing can sign it.", 403);
+  const name = await ensureName(ctx, me);
+  if (row.signed) return { ok: true, name };
+  const t = sec(ctx.t), record = JSON.stringify({ cell: b.cell, layer: LAYER, wing: b.wing });
+  for (let i = 0; i < 8; i++) {
+    const stmts = [db.prepare("UPDATE wing_firsts SET signed = 1 WHERE cell = ? AND layer = ? AND wing_key = ? AND signed = 0").bind(b.cell, LAYER, b.wing),
+      ...(await chainInserts(db, await head(db), [{ kind: "sign", record, playerId: me.id, t }]))];
+    try { await db.batch(stmts); return { ok: true, name }; }
+    catch (e) { if (chainClash(e)) continue; throw e; }
+  }
+  throw new Oops("The ledger is busy. Try again.", 503);
+}
+
+// A new name, never the same as the old one. Only for a player who has a name already.
+async function rename(ctx) {
+  const b = await body(ctx);
+  need(b.action === "reroll", "Unknown action.");
+  const me = await must(ctx);
+  need(!!me.name_a, "You get a name when you sign a find.");
+  return { name: await setFreeName(ctx, me, { a: me.name_a, b: me.name_b }) };
+}
+
+async function cells(ctx) {
+  const b = await body(ctx), { db } = ctx;
+  need(isCell(b.cell), "That isn't a cell.");
+  if (b.action === "save") {
+    const me = await player(ctx, true);
+    const n = (await db.prepare("SELECT COUNT(*) AS n FROM saved_cells WHERE player_id = ?").bind(me.id).first()).n;
+    const have = await db.prepare("SELECT 1 AS x FROM saved_cells WHERE player_id = ? AND cell = ?").bind(me.id, b.cell).first();
+    if (!have && n >= MAX_SAVED) throw new Oops(`You have ${MAX_SAVED} saved cells. Forget one first.`);
+    await db.prepare("INSERT OR IGNORE INTO saved_cells (player_id, cell, created_at) VALUES (?,?,?)").bind(me.id, b.cell, sec(ctx.t)).run();
+    return { ok: true };
+  }
+  if (b.action === "forget") {
+    const me = await must(ctx);
+    await db.prepare("DELETE FROM saved_cells WHERE player_id = ? AND cell = ?").bind(me.id, b.cell).run();
+    return { ok: true };
+  }
+  throw new Oops("Unknown action.");
 }
