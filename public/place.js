@@ -46,6 +46,19 @@ export function neighbour(cell, dir) {
   return best;
 }
 
+// The six cells around a cell, in the order they are drawn on the AREA map with north up: upper right, right, lower right,
+// lower left, left, upper left. A cell's neighbours sit 60 degrees apart in whatever direction the grid happens to lie there,
+// so they are put in order of bearing and the one nearest 30 degrees (upper right) goes first: the order around the ring
+// is exact, the angles are approximate. (Cell geometry only, nobody's position.)
+export function ring(cell) {
+  if (!isCell(cell)) throw new Error("That isn't a cell.");
+  const here = cellToLatLng(cell);
+  const ns = gridDisk(cell, 1).filter((n) => n !== cell).map((n) => ({ n, b: bearing(here, cellToLatLng(n)) })).sort((a, b) => a.b - b.b);
+  const off = (b) => Math.abs(((b - 30 + 540) % 360) - 180);
+  let first = 0; ns.forEach((x, i) => { if (off(x.b) < off(ns[first].b)) first = i; });
+  return [...ns.slice(first), ...ns.slice(0, first)].map((x) => x.n);
+}
+
 // How far apart two cells' centres are, in km.
 export const cellKm = (a, b) => greatCircleDistance(cellToLatLng(a), cellToLatLng(b), "km");
 

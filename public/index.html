@@ -123,7 +123,7 @@
   }
 
   function draw() {
-    if (st.floor) { st.map = st.zoom === "area" ? areaMap(st.floor, st.area) : FLOOR.minimap(st.floor, st); st.first = firstLine(st); }
+    if (st.floor) { st.map = st.zoom === "area" ? areaMap(st.area) : FLOOR.minimap(st.floor, st); st.first = firstLine(st); }
     document.getElementById("screen").innerHTML = colorize(renderScreen(st, new Date()));
   }
   let savePanel = null;

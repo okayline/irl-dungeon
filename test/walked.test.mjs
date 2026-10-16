@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import FLOOR from "../public/floor.js";
 import { areaMap } from "../public/area.js";
-import { neighbour } from "../public/place.js";
+import { ring } from "../public/place.js";
 import { renderScreen } from "../public/screen.js";
 import { arrive, load, forward, loadArea } from "../public/play.js";
 import { makeEnv, browser } from "./helpers.mjs";
@@ -49,43 +49,37 @@ test("a cell reached too fast keeps no rooms; test mode keeps none either", asyn
   assert.equal(sql(env, "SELECT COUNT(*) AS n FROM walked_rooms")[0].n, before);
 });
 
-test("the area: your cell and the cells N, E, S, W of it are new, entered or cleared", async () => {
-  const env = world(), me = browser(env, { ip: "198.51.100.5" });
+test("the area: your cell and the six cells around it are new, entered or cleared, in ring order", async () => {
+  const env = world(), me = browser(env, { ip: "198.51.100.5" }), around = ring(CELL);
   await post(me, "run", { cell: CELL, offset: -600 });
-  let a = (await post(me, "area", { cell: CELL })).data;
-  assert.deepEqual(a, { here: "entered", N: "new", E: "new", S: "new", W: "new" });
-  const east = neighbour(CELL, "E");                                           // as if you had walked there and cleared its first wing
-  env.DB.raw.exec(`INSERT INTO walked_rooms (player_id, cell, layer, room, created_at) VALUES (1, '${east}', 0, 0, 1)`);
-  env.DB.raw.exec(`INSERT INTO completions (player_id, cell, layer, wing_key, created_at) VALUES (1, '${east}', 0, '0', 1)`);
-  env.DB.raw.exec(`INSERT INTO walked_rooms (player_id, cell, layer, room, created_at) VALUES (1, '${neighbour(CELL, "N")}', 0, 0, 1)`);
-  a = (await post(me, "area", { cell: CELL })).data;
-  assert.deepEqual(a, { here: "entered", N: "entered", E: "cleared", S: "new", W: "new" });
+  assert.deepEqual((await post(me, "area", { cell: CELL })).data, { here: "entered", ring: Array(6).fill("new") });
+  env.DB.raw.exec(`INSERT INTO walked_rooms (player_id, cell, layer, room, created_at) VALUES (1, '${around[1]}', 0, 0, 1), (1, '${around[4]}', 0, 0, 1)`);
+  env.DB.raw.exec(`INSERT INTO completions (player_id, cell, layer, wing_key, created_at) VALUES (1, '${around[1]}', 0, '0', 1)`);   // as if cleared
+  assert.deepEqual((await post(me, "area", { cell: CELL })).data, { here: "entered", ring: ["new", "cleared", "new", "new", "entered", "new"] });
   const other = browser(env, { ip: "198.51.100.6" }); await post(other, "run", { cell: "8a29a1d7575ffff", offset: -600 });
-  assert.deepEqual((await post(other, "area", { cell: CELL })).data, { here: "new", N: "new", E: "new", S: "new", W: "new" }, "another player's marks are theirs");
+  assert.deepEqual((await post(other, "area", { cell: CELL })).data, { here: "new", ring: Array(6).fill("new") }, "another player's marks are theirs");
   assert.equal((await post(me, "area", { cell: "nope" })).status, 400);
   assert.equal((await browser(env, { ip: "198.51.100.7" })("/api/area", { cell: CELL })).status, 401);
 });
 
-test("the area map: north up, you in the middle, a hallway and a mark only along walls of the first room that lead out", () => {
-  const free = ["N", "E", "S", "W"].filter((d) => floor.rooms[0].doors[d] === undefined);
-  const rows = areaMap(floor, { here: "entered", N: "cleared", E: "entered", S: "new", W: "new" });
-  assert.equal(rows.length, 5); assert.equal(rows[2].slice(13, 16), "[@]");
-  const at = { N: [rows[0], 13], S: [rows[4], 13], W: [rows[2], 5], E: [rows[2], 21] }, want = { N: "[o]", E: "[.]", S: "[ ]", W: "[ ]" };
-  for (const d of ["N", "E", "S", "W"]) {
-    const [row, col] = at[d], got = (row.padEnd(29)).slice(col, col + 3);
-    assert.equal(got, free.includes(d) ? want[d] : "   ", d + (free.includes(d) ? " leads out" : " is a door into the wing"));
+test("ring: six different cells around the cell", () => {
+  for (const c of [CELL, "8a29a1d7575ffff", "8a1f2c4a1a07fff"]) {
+    const r = ring(c); assert.equal(new Set(r).size, 6); assert.ok(!r.includes(c));
   }
-  assert.equal(rows[2].slice(16, 21), free.includes("E") ? "=====" : "     ");
-  assert.equal(rows[2].slice(8, 13), free.includes("W") ? "=====" : "     ");
-  assert.equal(rows[1][14] || " ", free.includes("N") ? ":" : " "); assert.equal(rows[3][14] || " ", free.includes("S") ? ":" : " ");
-  assert.equal(areaMap(floor, null)[2].slice(13, 16), "[@]");
+});
+
+test("the area map: you in the middle, the six cells around you, one mark each", () => {
+  const rows = areaMap({ here: "entered", ring: ["new", "cleared", "entered", "new", "entered", "cleared"] });
+  assert.equal(rows.length, 5); assert.equal(rows[2].slice(13, 16), "[@]");
+  assert.deepEqual([rows[1][18], rows[2][22], rows[3][18], rows[3][10], rows[2][6], rows[1][10]], [".", "O", "o", ".", "o", "O"]);
+  assert.deepEqual(areaMap(null), ["", "          .       .", "      .      [@]      .", "          .       .", ""]);
 });
 
 test("the panel header has the zoom button: [-] on the room map, [+] on the area map", () => {
   const st = { floor, ...FLOOR.arrive(floor), cell: CELL, tz: "Pacific/Honolulu", log: "", strict: true, map: [] };
   const now = new Date(Date.UTC(2026, 9, 16, 12));
   assert.match(renderScreen(st, now), /-+ MAP \[-\] -+/);
-  assert.match(renderScreen({ ...st, zoom: "area", map: areaMap(floor, null) }, now), /-+ AREA \[\+\] -+/);
+  assert.match(renderScreen({ ...st, zoom: "area", map: areaMap(null) }, now), /-+ AREA \[\+\] -+/);
 });
 
 test("the page's client: load brings back the rooms you've stood in, and each step into a room is reported", async () => {

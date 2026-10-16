@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.15 - Ring - Oct 15 2026, 11:25 PM HST
+
+- **The area map is a ring.** You're `[@]` in the middle with the six cells around you, north up. Each cell is one mark: `.` a new cell, `o` one you've stood in, `O` one whose first wing you've walked. (v0.14 drew only four cells with hallways between them; this is the picture that was asked for.)
+
 ## v0.14 - Area - Oct 15 2026, 11:12 PM HST
 
 - **The map remembers on the server.** The rooms you've stood in are kept with your account, so the outline follows you to any device, and coming back to a cell shows where you've been.

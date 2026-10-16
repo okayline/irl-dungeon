@@ -21,12 +21,12 @@
 //   POST /api/admin {action: "test", on, cell?}   admins only: test mode on (remembering the cell you're in) or off
 //                                     (answers `back`: that cell, to return to)
 //   POST /api/rooms {cell, room}      note that you stood in a room (the minimap's outline; private, nothing published)
-//   POST /api/area {cell}             for the cell and its N, E, S, W neighbours: "new", "entered" or "cleared" (first wing walked)
+//   POST /api/area {cell}             for the cell and the six around it: "new", "entered" or "cleared" (first wing walked)
 //   POST /api/walk {cell, visited}    the rooms you've stood in; any wing this completes is recorded, and its first finder sealed
 
 import { GENESIS, sha256, verifyChain, head, chainInserts, isUnique, chainClash } from "./ledger.js";
 import FLOOR from "../public/floor.js";
-import { isCell, guessCell, neighbour } from "../public/place.js";
+import { isCell, guessCell, ring } from "../public/place.js";
 import { travelCheck, waitText } from "./travel.js";
 import { nameText, freeName } from "./names.js";
 import { LAYER, buildFloor, wingKey, finishedWings } from "./game.js";
@@ -276,20 +276,20 @@ async function rooms(ctx) {
   return { ok: true };
 }
 
-// POST /api/area {cell}: how this player stands with the cell they are in and the four cells their walls lead out to (the
-// neighbour in each compass direction, public/place.js): "cleared" once they have walked the cell's first wing,
-// "entered" once they have stood in any of its rooms, else "new". Answers { here, N, E, S, W }. Test mode: all "new".
+// POST /api/area {cell}: how this player stands with the cell they are in and the six cells around it (public/place.js ring,
+// in the order the AREA map draws them): "cleared" once they have walked the cell's first wing, "entered" once they have
+// stood in any of its rooms, else "new". Answers { here, ring: [six states] }. Test mode: all "new".
 async function area(ctx) {
   const b = await body(ctx), { db, env, req } = ctx;
   if (!(await rateLimit(env, req, "area", 1200, 3600))) throw new Oops("Too many tries. Try again later.", 429);
   need(isCell(b.cell), "That isn't a cell.");
-  const me = await must(ctx), cells = { here: b.cell };
-  for (const d of ["N", "E", "S", "W"]) cells[d] = neighbour(b.cell, d);
-  if (testing(me)) return Object.fromEntries(Object.keys(cells).map((k) => [k, "new"]));
-  const ids = [...new Set(Object.values(cells))], marks = ids.map(() => "?").join(",");
+  const me = await must(ctx), around = ring(b.cell);
+  if (testing(me)) return { here: "new", ring: around.map(() => "new") };
+  const ids = [b.cell, ...around], marks = ids.map(() => "?").join(",");
   const entered = new Set((await db.prepare(`SELECT DISTINCT cell FROM walked_rooms WHERE player_id = ? AND layer = ? AND cell IN (${marks})`).bind(me.id, LAYER, ...ids).all()).results.map((x) => x.cell));
   const cleared = new Set((await db.prepare(`SELECT DISTINCT cell FROM completions WHERE player_id = ? AND layer = ? AND wing_key = '0' AND cell IN (${marks})`).bind(me.id, LAYER, ...ids).all()).results.map((x) => x.cell));
-  return Object.fromEntries(Object.entries(cells).map(([k, c]) => [k, cleared.has(c) ? "cleared" : entered.has(c) ? "entered" : "new"]));
+  const state = (c) => (cleared.has(c) ? "cleared" : entered.has(c) ? "entered" : "new");
+  return { here: state(b.cell), ring: around.map(state) };
 }
 
 async function run(ctx) {
