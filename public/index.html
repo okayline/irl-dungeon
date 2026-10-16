@@ -34,10 +34,8 @@
   .viewpop { position: absolute; background: var(--bg); overflow: auto; box-sizing: border-box; outline: 1px solid var(--trail); }
   .viewpop pre { white-space: pre-wrap; display: flex; flex-direction: column; min-height: 100%; margin: 0; }
   .viewpop pre > div { flex: none; }
-  .viewpop .top { position: sticky; top: 0; background: var(--bg); }
-  .viewpop .foot { margin-top: auto; }
-  .viewpop .foot.on { position: sticky; bottom: 0; background: var(--bg); }
-  .viewpop .code { -webkit-user-select: text; user-select: text; }
+  .viewpop .top { position: sticky; top: 0; background: var(--bg); padding-top: 0.5em; }
+    .viewpop .code { -webkit-user-select: text; user-select: text; }
   .viewpop .btn { display: inline-block; }
   .codebox { font: inherit; background: var(--bg); color: var(--fg); border: 1px solid var(--trail); width: 26ch; padding: 0 4px; text-transform: uppercase; }
   .cell .g { font-family: "DejaVu Sans Mono", Menlo, Consolas, "Segoe UI Symbol", monospace; line-height: 0; }
@@ -113,7 +111,7 @@
   function placeInView(box) {
     const scr = document.getElementById("screen"), r = scr.getBoundingClientRect();
     const rows = scr.textContent.split("\n").length, rh = r.height / rows, cw = r.width / 80;
-    Object.assign(box.style, { left: scr.offsetLeft + cw + "px", top: scr.offsetTop + 6 * rh + "px", width: 47 * cw + "px", height: 17 * rh + "px", padding: `${rh / 2}px ${cw}px` });
+    Object.assign(box.style, { left: scr.offsetLeft + cw + "px", top: scr.offsetTop + 6 * rh + "px", width: 47 * cw + "px", height: 17 * rh + "px", padding: `0 ${cw}px ${rh / 2}px` });   // no top padding: the pinned head sits flush, so nothing shows above it
   }
   addEventListener("resize", () => { if (saveOpen()) placeInView(document.getElementById("save")); });
   function openSavePanel() {

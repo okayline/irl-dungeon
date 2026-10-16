@@ -38,8 +38,11 @@ export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchA
     const top = root.scrollTop;
     pre.textContent = "";
     root.hidden = false;
-    row(" SAVE", " ".repeat(26), button("CLOSE", close)).className = "top";
-    line(" " + "-".repeat(43));
+    // The head (title, rule, and the message when there is one) stays at the top; nothing is pinned at the foot.
+    const head = el("div", "top"); pre.appendChild(head);
+    const t = el("div"); t.append(" SAVE", " ".repeat(26), button("CLOSE", close)); head.appendChild(t);
+    head.appendChild(el("div", null, " " + "-".repeat(43)));
+    const m = el("div", "msg gold", msg ? " " + msg : ""); m.hidden = !msg; head.appendChild(m);
     if (!a) { line(" Loading...", "dim"); return; }
     if (a.error) { line(" " + a.error); return; }
     if (newCode) {
@@ -81,12 +84,11 @@ export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchA
     if (a.codes.length || a.passkeys.length) row(" ", button("LOG OUT OF THIS BROWSER", logout));
     line();
     line(a.player ? ` Saved on ${a.devices} device${a.devices === 1 ? "" : "s"}.` : " No player yet. A code or passkey makes one.", "dim");
-    line(msg ? " " + msg : "", "msg foot" + (msg ? " on" : ""));
     root.scrollTop = top;
   }
 
-  // The message row is pinned to the foot only while it says something (an empty pinned row hid what scrolled under it).
-  const say = (t) => { msg = t; const m = pre.querySelector(".msg"); if (m) { m.textContent = " " + (t || ""); m.classList.toggle("on", !!t); } };
+  // Messages show under the title, at the top with it, so they never cover the list.
+  const say = (t) => { msg = t; const m = pre.querySelector(".msg"); if (m) { m.textContent = t ? " " + t : ""; m.hidden = !t; } };
   const close = () => { root.hidden = true; pre.textContent = ""; onClose(); };
   async function after(r, ok) { if (r.error) return say(r.error); if (ok) msg = ok; draw(); onChange(); }
 
