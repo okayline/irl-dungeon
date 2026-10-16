@@ -25,3 +25,23 @@ export function dayFor(nowMs, offsetMin, lastDay) {
 
 // The date as text, for the public ledger (a date, never a time).
 export const dayText = (day) => new Date(day * DAY_MS).toISOString().slice(0, 10);
+
+// ---------- cross-check against the time zone Cloudflare infers from the player's IP (request.cf.timezone) ----------
+// A soft signal only: VPNs and roaming phones make the IP's zone wrong sometimes. It never blocks anyone.
+
+// The UTC offset in minutes that an IANA zone name has at `nowMs` (so daylight saving is counted), or null if unknown.
+export function zoneOffset(tz, nowMs) {
+  if (typeof tz !== "string" || !tz) return null;
+  try {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric",
+      day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" }).formatToParts(new Date(nowMs)).map((p) => [p.type, p.value]));
+    const wall = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+    return Math.round((wall - Math.floor(nowMs / 1000) * 1000) / 60000);
+  } catch { return null; }                                   // not a real zone name
+}
+
+// "match" (same offset right now), "mismatch", or "unknown" (the request carried no usable zone).
+export function offsetCheck(claimedOffset, tz, nowMs) {
+  const z = zoneOffset(tz, nowMs);
+  return z === null ? "unknown" : z === claimedOffset ? "match" : "mismatch";
+}

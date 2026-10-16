@@ -49,3 +49,37 @@ test("text for the ledger is a date with no time", () => {
   assert.equal(dayText(days(2026, 10, 15)), "2026-10-15");
   assert.match(dayText(20000), /^\d{4}-\d{2}-\d{2}$/);
 });
+
+import { zoneOffset, offsetCheck } from "../src/day.js";
+
+test("zone names give the right offset, daylight saving included (known facts, not computed)", () => {
+  const oct = Date.UTC(2026, 9, 15, 12), dec = Date.UTC(2026, 11, 15, 12);
+  assert.equal(zoneOffset("Pacific/Honolulu", oct), -600);      // Hawaii has no daylight saving
+  assert.equal(zoneOffset("Pacific/Honolulu", dec), -600);
+  assert.equal(zoneOffset("Asia/Kolkata", oct), 330);
+  assert.equal(zoneOffset("America/New_York", oct), -240);      // EDT
+  assert.equal(zoneOffset("America/New_York", dec), -300);      // EST
+  assert.equal(zoneOffset("UTC", oct), 0);
+});
+
+test("the daylight saving switch lands on the right instant (US fall back: 2026-11-01 06:00 UTC)", () => {
+  const t = Date.UTC(2026, 10, 1, 6, 0);
+  assert.equal(zoneOffset("America/New_York", t - 1000), -240);
+  assert.equal(zoneOffset("America/New_York", t), -300);
+});
+
+test("unknown or junk zones are 'unknown', never a guess or a crash", () => {
+  const now = Date.UTC(2026, 9, 15);
+  for (const bad of [undefined, null, "", "Nowhere/Land", 5, {}, "Pacific/Honolulu; DROP TABLE"]) {
+    assert.equal(zoneOffset(bad, now), null);
+    assert.equal(offsetCheck(-600, bad, now), "unknown");
+  }
+});
+
+test("a claimed offset matches only the zone's actual offset", () => {
+  const now = Date.UTC(2026, 9, 15, 12);
+  assert.equal(offsetCheck(-600, "Pacific/Honolulu", now), "match");
+  assert.equal(offsetCheck(-540, "Pacific/Honolulu", now), "mismatch");
+  assert.equal(offsetCheck(-300, "America/New_York", now), "mismatch");   // winter offset in October
+  assert.equal(offsetCheck(-240, "America/New_York", now), "match");
+});
