@@ -2,6 +2,12 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.18 - A Beat - Oct 15 2026, 11:40 PM HST
+
+- **Walking out takes a beat.** Leaving a cell, the line comes up "You walk out north, along the hallway" and three dots appear one after another, then a full stop, and then you're in the next cell, as the dots after a search do in 4Dungeon.
+- **Fixed:** since v0.16 the page's script had a typo that stopped it from loading at all (v0.16 and v0.17 were broken in the browser). It's fixed, and a test now checks the page's script parses.
+- **The zoom button stays put.** Pressing `+` or `-` no longer shifts the map's title: "MAP" and "AREA" start in the same place and the button doesn't move.
+
 ## v0.17 - Lines - Oct 15 2026, 11:30 PM HST
 
 - **The area map has lines.** A thin line joins you to each cell your first room's hallways lead out to: a hallway going right on the room map is a `------` going right on the area map (and `/` `\` for the diagonal ones). Cells with no line are the ones you'd only reach by walking there yourself.

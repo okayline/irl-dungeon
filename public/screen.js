@@ -8,7 +8,7 @@
 import { roomName } from "./roomnames.js";
 
 // The build number: bumped with every release, so the page, CHANGELOG.md and the git history always match.
-const VERSION = "v0.17";
+const VERSION = "v0.18";
 const HOME = "Pacific/Honolulu";
   const W = 80, VW = 47, VH = 17, OFF = [0, 3, 6];
   const L_ = o => 2 + o, R_ = o => 44 - o;
@@ -225,7 +225,7 @@ function renderScreen(st, now) {
   if (d) { overlay(16, 16, `[ < ]  ${st.facing}  [ > ]`); overlay(15, 20, "[  ^  ]"); }
   // ---- the right-hand panel
   const map = (st.map || []).slice(0, 5); while (map.length < 5) map.push("");
-  const title = st.zoom === "area" ? " AREA [+] " : " MAP [-] ", dash = PW - 1 - title.length;
+  const title = st.zoom === "area" ? " AREA [+] " : " MAP  [-] ", dash = PW - 1 - title.length;
   const mapHead = " " + "-".repeat(Math.floor(dash / 2)) + title + "-".repeat(Math.ceil(dash / 2));
   const here = d ? (d.room.hall ? "PASSAGE" : d.room.dead ? "DEAD END" : "ROOM") : "";
   const stat = [

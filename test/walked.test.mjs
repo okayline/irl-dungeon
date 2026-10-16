@@ -94,7 +94,7 @@ test("which cells the first room leads out to: each wall without a door goes to 
 test("the panel header has the zoom button: [-] on the room map, [+] on the area map", () => {
   const st = { floor, ...FLOOR.arrive(floor), cell: CELL, tz: "Pacific/Honolulu", log: "", strict: true, map: [] };
   const now = new Date(Date.UTC(2026, 9, 16, 12));
-  assert.match(renderScreen(st, now), /-+ MAP \[-\] -+/);
+  assert.match(renderScreen(st, now), /-+ MAP  \[-\] -+/);
   assert.match(renderScreen({ ...st, zoom: "area", map: areaMap(null, []) }, now), /-+ AREA \[\+\] -+/);
 });
 
@@ -109,4 +109,12 @@ test("the page's client: load brings back the rooms you've stood in, and each st
   assert.ok(again.visited[st.at], "a new visit finds the room you stood in");
   const a = await loadArea(again, api);
   assert.equal(a.area.here, "entered");
+});
+
+test("the zoom button stays where it is: the map's and the area's titles put the [ at the same column and the title starts at the same column", () => {
+  const st = { floor, ...FLOOR.arrive(floor), cell: CELL, tz: "Pacific/Honolulu", log: "", strict: true, map: [] }, now = new Date(Date.UTC(2026, 9, 16, 12));
+  const head = (zoom) => renderScreen({ ...st, zoom }, now).split("\n").find((l) => /\[[-+]\]/.test(l));
+  const a = head("room"), b = head("area");
+  assert.equal(a.indexOf("["), b.indexOf("["));
+  assert.equal(a.indexOf("MAP"), b.indexOf("AREA"));
 });

@@ -122,8 +122,9 @@
     }).join("\n");
   }
 
+  // No fog of war: the map is drawn with every room the cell has built marked, walked or not.
   function draw() {
-    if (st.floor) { st.map = st.zoom === "area" ? areaMap(st.area, exitSlots(st.cell, st.floor)) : FLOOR.minimap(st.floor, { ...st, visited: st.floor.rooms.map((r) => !!r) });      // no fog of war: every room the cell has built is drawn, walked or not st.first = firstLine(st); }
+    if (st.floor) { st.map = st.zoom === "area" ? areaMap(st.area, exitSlots(st.cell, st.floor)) : FLOOR.minimap(st.floor, { ...st, visited: st.floor.rooms.map((r) => !!r) }); st.first = firstLine(st); }
     document.getElementById("screen").innerHTML = colorize(renderScreen(st, new Date()));
   }
   let savePanel = null;
@@ -148,6 +149,19 @@
     savePanel = openSave(box, { onClose: () => { savePanel = null; }, cell: () => st.cell || null, onGo: (c) => { arriveAt(c, "> You go to a saved cell."); draw(); }, onTest: (on, back) => { const c = on ? st.cell : back || st.cell; if (c) { arriveAt(c, on ? "> Test mode. Nothing here counts." : "> Test mode off. You're back where you started."); draw(); } } });
   }
   let busy = false;      // one step at a time: a step may wait for the server
+  // Walking out of a cell is a hallway, and it takes a beat, as the dots after a search do in 4Dungeon: the line comes up, a dot
+  // every 200 ms, a full one-second stop after the third, and then you are in the next cell.
+  function walkOut(dir) {
+    const from = st.cell, head = `> You walk out ${WORD[dir]}, along the hallway`;
+    st = { ...st, leave: undefined, log: head }; draw(); busy = true;
+    let dots = 0;
+    const step = () => {
+      if (st.cell !== from) { busy = false; return; }                       // you went somewhere else meanwhile (LOCATE, SAVE)
+      if (dots < 3) { dots++; st = { ...st, log: head + ".".repeat(dots) }; draw(); setTimeout(step, dots === 3 ? 1000 : 200); return; }
+      busy = false; arriveAt(neighbour(from, dir), "> You come out of the hallway into the next cell.", dir, { N: "S", S: "N", E: "W", W: "E" }[dir]); draw();
+    };
+    setTimeout(step, 200);
+  }
   function act(a) {
     if (foundOpen() || invokeOpen()) return;
     if (a === "I") return openInvokePanel();
@@ -161,7 +175,7 @@
       busy = false; st = s;
       if (st.popup) { const item = st.popup; st = { ...st, popup: undefined }; showFound(item); }
       if (st.zoom === "area" && !st.leave) loadArea(st, api).then(s => { if (s.cell === st.cell) { st = { ...st, area: s.area }; draw(); } });     // a wing walked in full changes the marks
-      if (st.leave) { const dir = st.leave; arriveAt(neighbour(st.cell, dir), `> You walk out ${WORD[dir]}, along the hallway into the next cell.`, dir, { N: "S", S: "N", E: "W", W: "E" }[dir]); }
+      if (st.leave) return walkOut(st.leave);
       draw();
     });
   }
