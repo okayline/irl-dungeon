@@ -2,34 +2,34 @@
 
 Times are Hawaii time (HST). Newest first.
 
-## v0.14 - Area - Oct 16 2026, 12:05 AM HST
+## v0.14 - Area - Oct 15 2026, 11:12 PM HST
 
 - **The map remembers on the server.** The rooms you've stood in are kept with your account, so the outline follows you to any device, and coming back to a cell shows where you've been.
 - **Zoom the map.** Press `+` or `-` (or click the button on the map's title) to switch between the room map and an AREA map. The area map has north always up: you in the middle, and along each way out of the first room the next cell, joined by a hallway. A cell shows `[ ]` if it's new, `[.]` if you've stood in it, `[o]` if you've walked its whole first wing.
 
-## v0.13 - Hallways - Oct 15 2026, 11:35 PM HST
+## v0.13 - Hallways - Oct 15 2026, 11:06 PM HST
 
 - **The way out is a hallway.** In a cell's first room, every wall that leads out to the next cell now has a hallway drawn on the map out to its edge (`=` going sideways, `:` going up or down), so walking out feels like walking down a passage and not like stepping into a corner.
 - **Arriving shows where you came from.** In the new cell, the hallway you came in by ends in a `*`.
 - Heads up: a wall leads to the neighbouring cell that lies closest to that compass direction (within about 25 degrees), and going back the way you came returns you to the same cell.
 
-## v0.12 - Names and Gates - Oct 15 2026, 11:20 PM HST
+## v0.12 - Names and Gates - Oct 15 2026, 11:02 PM HST
 
 - **Rooms have names.** Under the map, in the lower left, each room shows a name drawn from 4Dungeon's lists (passages, dead ends and plain rooms each have their own), and no two rooms on a floor share one. The cell's first room is called "The way out".
 - **The way out is marked on the map.** In a cell's first room, each wall that leads out to the next cell is marked with its own symbol (`:` on the sides, `=` above and below) in the door grey.
 
-## v0.11 - Outlines - Oct 15 2026, 11:10 PM HST
+## v0.11 - Outlines - Oct 15 2026, 10:57 PM HST
 
 - **The map outlines where you've been.** The rooms you've walked in are outlined in the map's dim grey, as in 4Dungeon, and your @ and the way you face stay bright.
 - **Cells remember your steps.** Walk into a cell you've been in before and the rooms you walked there are already outlined, so a cell you know no longer looks like a brand-new one. (Remembered on this device only.)
 
-## v0.10 - Fuller Walls - Oct 15 2026, 10:55 PM HST
+## v0.10 - Fuller Walls - Oct 15 2026, 10:50 PM HST
 
 - **Walls hide more, and give it up faster.** Every wall without a door now hides 0 to 3 things (before, a room hid one thing behind one wall). The first thing on a wall takes 3 to 6 searches; each one after it takes half again as many. You can find things on every wall of a room, every day.
 - A faint noise now comes sooner (after 2 searches into a thing), and a bare wall still never answers.
 - "Nothing more here today" now means that wall has given you everything.
 
-## v0.09 - Numbered - Oct 15 2026, 10:35 PM HST
+## v0.09 - Numbered - Oct 15 2026, 10:34 PM HST
 
 - **Every find is a numbered copy, and the numbers are shared with the other games.** The number now comes from one registry used by all the games, so "#4" of an item is the fourth copy anywhere, not just here.
 - A number can arrive a moment late. If the registry can't be reached, you still keep what you found and it shows without a number; it gets one the next time you open [I]NVOKE or search that room.
