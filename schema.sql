@@ -13,7 +13,9 @@ CREATE TABLE IF NOT EXISTS players (
   created_at  INTEGER NOT NULL,
   seen_at     INTEGER NOT NULL,
   name_a      TEXT,
-  name_b      TEXT
+  name_b      TEXT,
+  admin       INTEGER NOT NULL DEFAULT 0,      -- set by hand for the owner
+  test_mode   INTEGER NOT NULL DEFAULT 0       -- an admin's switch: while on, nothing they do counts (see test_unlocks)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS players_name ON players (name_a, name_b) WHERE name_a IS NOT NULL;
 
@@ -138,4 +140,15 @@ CREATE TABLE IF NOT EXISTS saved_cells (
   cell        TEXT NOT NULL,
   created_at  INTEGER NOT NULL,
   PRIMARY KEY (player_id, cell)
+);
+
+-- Doors an admin opened in test mode, kept apart from real unlocks: no key, no day, never on the ledger.
+CREATE TABLE IF NOT EXISTS test_unlocks (
+  id          INTEGER PRIMARY KEY,
+  player_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  cell        TEXT NOT NULL,
+  layer       INTEGER NOT NULL DEFAULT 0,
+  door        INTEGER NOT NULL,
+  created_at  INTEGER NOT NULL,
+  UNIQUE (player_id, cell, layer, door)
 );

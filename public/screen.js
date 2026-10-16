@@ -227,7 +227,7 @@ function renderScreen(st, now) {
   const mapHead = " " + "-".repeat(Math.floor(dash / 2)) + title + "-".repeat(Math.ceil(dash / 2));
   const here = d ? (d.room.hall ? "PASSAGE" : d.room.dead ? "DEAD END" : "ROOM") : "";
   const stat = [
-    " THIS CELL", rule,
+    st.test ? " THIS CELL     [TEST MODE]" : " THIS CELL", rule,
     " " + (st.cell || "NONE").slice(0, PW - 2),
     d ? ` WING ${d.room.wing + 1}   ${here}` : "",
     d ? ` ${f.wings.length} WING${f.wings.length === 1 ? "" : "S"} BUILT` : "",

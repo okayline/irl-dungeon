@@ -17,7 +17,7 @@ const deviceLabel = () => { const ua = navigator.userAgent; return /Android/.tes
 // Draws the panel into `root` (a div over the frame). `onChange()` is called after a login or logout, so the page can
 // refresh; `onClose()` when the player closes it. `cell()` is the cell you're in (for SAVE THIS CELL); `onGo(cell)`
 // takes you to a saved one.
-export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchApi = api, cell = () => null, onGo = () => {} } = {}) {
+export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchApi = api, cell = () => null, onGo = () => {}, onTest = () => {} } = {}) {
   let newCode = null, msg = "", last = null, copied = false, rerollArmed = false;
   const pre = root.querySelector("pre");
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -51,6 +51,12 @@ export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchA
       line(" Write it down. It can't be shown again.");
       row("   ", button(copied ? "COPIED" : "COPY", copyCode), "  ", button("DOWNLOAD AS A TEXT FILE", download));
       row("   ", button("DONE", () => { newCode = null; copied = false; msg = ""; paint(last); }));
+      line();
+    }
+    if (a.admin) {
+      line(" ADMIN", "gold");
+      row(`   TEST MODE: ${a.test ? "ON " : "OFF"}  `, button(a.test ? "TURN OFF" : "TURN ON", () => setTest(!a.test)));
+      line(a.test ? "   No key or travel limits. Nothing counts." : "   A sandbox where nothing you do counts.", "dim");
       line();
     }
     line(" NAME");
@@ -102,6 +108,7 @@ export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchA
     rerollArmed = false;
     const r = await fetchApi("name", { action: "reroll" }); if (r.error) return say(r.error); msg = "Your name is now " + r.name + "."; draw();
   }
+  async function setTest(on) { const r = await fetchApi("admin", { action: "test", on }); if (r.error) return say(r.error); msg = on ? "Test mode is on." : "Test mode is off. Back to your real game."; draw(); onTest(on); }
   async function saveCell(c) { const r = await fetchApi("cells", { action: "save", cell: c }); if (r.error) return say(r.error); msg = "Saved."; draw(); }
   async function forgetCell(c) { const r = await fetchApi("cells", { action: "forget", cell: c }); if (r.error) return say(r.error); msg = "Forgotten."; draw(); }
   async function makeCode() { const r = await fetchApi("codes", { action: "new" }); if (r.error) return say(r.error); newCode = r.code; msg = ""; draw(); onChange(); }

@@ -33,7 +33,7 @@ export async function load(st, api, offset = offsetNow()) {
   // wings already walked count as reported, so they aren't sent again
   const reported = floor.wings.map((w, i) => (r.completed.includes(wingKeyOf(floor, r.unlocks, i)) ? i : -1)).filter((i) => i >= 0);
   const firsts = Object.fromEntries((r.firsts || []).map((x) => [x.wing, x.name]));
-  const out = { ...st, loaded: true, keyReady: r.keyReady, doors: r.unlocks.slice(), reported, credit: r.credit, firsts, unsigned: (r.unsigned || []).slice(), signed: (r.signed || []).slice() };
+  const out = { ...st, loaded: true, keyReady: r.keyReady, doors: r.unlocks.slice(), reported, credit: r.credit, firsts, unsigned: (r.unsigned || []).slice(), signed: (r.signed || []).slice(), test: !!r.test };
   if (r.credit === false) out.log = `> You got here fast. This cell earns nothing for ${waitText(r.waitSec)}.`;
   return out;
 }
@@ -53,6 +53,7 @@ export async function forward(st, api, offset = offsetNow()) {
   const r = await ask(api, "unlock", { cell: s.cell, door: unlock, offset });
   if (r.error) return { ...s, confirm: undefined, ...(/key is spent/.test(r.error) ? { keyReady: false } : {}), log: "> " + r.error };
   FLOOR.growDoor(s.floor, unlock);
+  if (r.test) return { ...s, confirm: undefined, doors: [...(s.doors || []), unlock], log: "> The door opens. (Test mode: no key used.)" };
   return { ...s, confirm: undefined, keyReady: false, doors: [...(s.doors || []), unlock], log: "> Today's key turns. The door opens." };
 }
 
@@ -69,6 +70,7 @@ async function report(st, api) {
   const out = { ...st, reported: [...st.reported, ...fresh], firsts: { ...(st.firsts || {}) }, unsigned: (st.unsigned || []).slice() };
   for (const w of r.wings) if (w.first) { out.firsts[w.key] = null; out.unsigned.push(w.key); }
   const first = r.wings.some((w) => w.first);
+  if (r.test) { if (r.wings.length) out.log = "> You've walked this whole wing. (Test mode: not recorded.)"; return out; }
   if (r.wings.length) out.log = first ? "> You're the first to walk this whole wing! Press Y to sign it with your name." : "> You've walked this whole wing.";
   return out;
 }

@@ -18,6 +18,7 @@
 //                                     none), or with unsign: true take your name off it again
 //   POST /api/name {action: "reroll"} a new two-word name (only once you have one)
 //   POST /api/cells {action: "save" | "forget", cell}   your saved cells (up to 20, listed in /api/account)
+//   POST /api/admin {action: "test", on}   admins only: test mode on or off (see `testing`)
 //   POST /api/walk {cell, visited}    the rooms you've stood in; any wing this completes is recorded, and its first finder sealed
 
 import { GENESIS, sha256, verifyChain, head, chainInserts, isUnique, chainClash } from "./ledger.js";
@@ -44,7 +45,7 @@ const ROUTES = {
   "GET /api/account": account, "POST /api/codes": codes, "POST /api/load": loadCode,
   "POST /api/passkey": passkey, "POST /api/logout": logout,
   "GET /api/ledger": ledger, "GET /api/here": here, "GET /api/verify": verify,
-  "POST /api/run": run, "POST /api/sign": sign, "POST /api/name": rename, "POST /api/cells": cells, "POST /api/unlock": unlock, "POST /api/walk": walk,
+  "POST /api/run": run, "POST /api/sign": sign, "POST /api/name": rename, "POST /api/cells": cells, "POST /api/admin": admin, "POST /api/unlock": unlock, "POST /api/walk": walk,
 };
 
 export default {
@@ -136,7 +137,7 @@ async function account(ctx) {
   const passkeys = (await db.prepare("SELECT id, label, created_at, last_used_at FROM passkeys WHERE player_id = ? ORDER BY id").bind(me.id).all()).results;
   const devices = 1 + (await db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE player_id = ?").bind(me.id).first()).n;
   const saved = (await db.prepare("SELECT cell, created_at FROM saved_cells WHERE player_id = ? ORDER BY created_at, cell").bind(me.id).all()).results;
-  return { player: true, codes, passkeys, devices, name: nameText(me.name_a, me.name_b), cells: saved };
+  return { player: true, codes, passkeys, devices, name: nameText(me.name_a, me.name_b), cells: saved, ...(me.admin ? { admin: true, test: !!me.test_mode } : {}) };
 }
 
 async function codes(ctx) {
@@ -224,6 +225,10 @@ const need = (ok, msg, status = 400) => { if (!ok) throw new Oops(msg, status); 
 async function theRun(ctx, b, create) {
   need(isCell(b.cell), "That isn't a cell.");
   const me = create ? await player(ctx, true) : await must(ctx);
+  if (testing(me)) {        // test mode: the admin's own test doors, no travel check, and the last place left alone
+    const doors = (await ctx.db.prepare("SELECT door FROM test_unlocks WHERE player_id = ? AND cell = ? AND layer = ? ORDER BY id").bind(me.id, b.cell, LAYER).all()).results.map((r) => r.door);
+    return { me, doors, floor: buildFloor(b.cell, doors), travel: { ok: true }, test: true };
+  }
   const doors = (await ctx.db.prepare("SELECT door FROM unlocks WHERE player_id = ? AND cell = ? AND layer = ? ORDER BY id").bind(me.id, b.cell, LAYER).all()).results.map((r) => r.door);
   return { me, doors, floor: buildFloor(b.cell, doors), travel: await travel(ctx, me, b.cell) };
 }
@@ -245,8 +250,17 @@ async function here(ctx) {
 const lastKeyDay = async (ctx, me) => (await ctx.db.prepare("SELECT MAX(day) AS d FROM unlocks WHERE player_id = ?").bind(me.id).first()).d;
 const dayOf = (ctx, offset, last) => { try { return dayFor(ctx.t, offset, last); } catch (e) { if (e instanceof BadOffset) throw new Oops(e.message); throw e; } };
 
+// Test mode: an admin's sandbox. Nothing done in it counts: no key, no travel check, no completions, no first finds,
+// no signatures, nothing on the ledger, and its doors live in test_unlocks, which only that admin's test floors read.
+const testing = (me) => !!(me && me.admin && me.test_mode);
+
 async function run(ctx) {
   const b = await body(ctx), r = await theRun(ctx, b, true), { db } = ctx;
+  if (r.test) {
+    const firsts = (await db.prepare("SELECT f.wing_key, f.signed, p.name_a, p.name_b FROM wing_firsts f JOIN players p ON p.id = f.player_id WHERE f.cell = ? AND f.layer = ?").bind(b.cell, LAYER).all()).results
+      .map((x) => ({ wing: x.wing_key, name: x.signed ? nameText(x.name_a, x.name_b) : null }));
+    return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed: [], keyReady: true, firsts, unsigned: [], signed: [], credit: true, test: true };
+  }
   const completed = (await db.prepare("SELECT wing_key FROM completions WHERE player_id = ? AND cell = ? AND layer = ?").bind(r.me.id, b.cell, LAYER).all()).results.map((x) => x.wing_key);
   const last = await lastKeyDay(ctx, r.me);
   // keyReady is only worked out when the page says what time zone offset it is on
@@ -264,6 +278,11 @@ async function unlock(ctx) {
   if (!(await rateLimit(env, req, "unlock", 120, 3600))) throw new Oops("Too many tries. Try again later.", 429);
   need(Number.isInteger(b.door) && b.door >= 0, "That isn't a door.");
   const r = await theRun(ctx, b, false);
+  if (r.test) {
+    need(FLOOR.lockedDoors(r.floor).includes(b.door), "That isn't a door you can unlock.");
+    await db.prepare("INSERT OR IGNORE INTO test_unlocks (player_id, cell, layer, door, created_at) VALUES (?,?,?,?,?)").bind(r.me.id, b.cell, LAYER, b.door, sec(ctx.t)).run();
+    return { ok: true, door: b.door, test: true };
+  }
   needCredit(r);
   const last = await lastKeyDay(ctx, r.me), day = dayOf(ctx, b.offset, last);
   if (last != null && day <= last) throw new Oops("The door won't unlock. Today's key is spent. Another comes tomorrow.", 403);
@@ -281,6 +300,11 @@ async function walk(ctx) {
   const b = await body(ctx), { db, env, req } = ctx;
   if (!(await rateLimit(env, req, "walk", 240, 3600))) throw new Oops("Too many tries. Try again later.", 429);
   const r = await theRun(ctx, b, false);
+  if (r.test) {                         // checked like a real walk, recorded nowhere
+    const fin = finishedWings(r.floor, r.doors, b.visited);
+    need(fin.ok, fin.error);
+    return { wings: fin.wings.map((w) => ({ key: w.key, wing: w.wing, first: false })), completed: [], test: true };
+  }
   needCredit(r);
   const fin = finishedWings(r.floor, r.doors, b.visited);
   need(fin.ok, fin.error);
@@ -341,6 +365,7 @@ async function sign(ctx) {
   need(isCell(b.cell), "That isn't a cell.");
   need(typeof b.wing === "string" && /^0(>\d{1,4}){0,12}$/.test(b.wing), "That isn't a wing.");
   const me = await must(ctx);
+  need(!testing(me), "Test mode is on. Nothing is signed in test mode.", 403);
   const row = await db.prepare("SELECT player_id, signed FROM wing_firsts WHERE cell = ? AND layer = ? AND wing_key = ?").bind(b.cell, LAYER, b.wing).first();
   need(row && row.player_id === me.id, "Only the first to walk a wing can sign it.", 403);
   const off = b.unsign === true, want = off ? 0 : 1;
@@ -382,4 +407,15 @@ async function cells(ctx) {
     return { ok: true };
   }
   throw new Oops("Unknown action.");
+}
+
+// ---------- admin ----------
+
+async function admin(ctx) {
+  const b = await body(ctx);
+  const me = await must(ctx);
+  need(!!me.admin, "Admins only.", 403);
+  need(b.action === "test" && typeof b.on === "boolean", "Unknown action.");
+  await ctx.db.prepare("UPDATE players SET test_mode = ? WHERE id = ?").bind(b.on ? 1 : 0, me.id).run();
+  return { ok: true, test: b.on };
 }

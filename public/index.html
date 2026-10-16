@@ -117,7 +117,7 @@
   function openSavePanel() {
     if (saveOpen()) return;
     const box = document.getElementById("save"); box.hidden = false; placeInView(box);
-    savePanel = openSave(box, { onClose: () => { savePanel = null; }, cell: () => st.cell || null, onGo: (c) => { arriveAt(c, "> You go to a saved cell."); draw(); } });
+    savePanel = openSave(box, { onClose: () => { savePanel = null; }, cell: () => st.cell || null, onGo: (c) => { arriveAt(c, "> You go to a saved cell."); draw(); }, onTest: (on) => { if (st.cell) { arriveAt(st.cell, on ? "> Test mode. Nothing here counts." : "> Back to your real game."); draw(); } } });
   }
   let busy = false;      // one step at a time: a step may wait for the server
   function act(a) {
