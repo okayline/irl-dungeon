@@ -2,8 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import FLOOR from "../public/floor.js";
-import { areaMap } from "../public/area.js";
-import { ring } from "../public/place.js";
+import { areaMap, exitSlots } from "../public/area.js";
+import { ring, neighbour } from "../public/place.js";
 import { renderScreen } from "../public/screen.js";
 import { arrive, load, forward, loadArea } from "../public/play.js";
 import { makeEnv, browser } from "./helpers.mjs";
@@ -71,15 +71,31 @@ test("ring: six different cells around the cell", () => {
 test("the area map: you in the middle, the six cells around you, one mark each", () => {
   const rows = areaMap({ here: "entered", ring: ["new", "cleared", "entered", "new", "entered", "cleared"] });
   assert.equal(rows.length, 5); assert.equal(rows[2].slice(13, 16), "[@]");
-  assert.deepEqual([rows[1][18], rows[2][22], rows[3][18], rows[3][10], rows[2][6], rows[1][10]], [".", "O", "o", ".", "o", "O"]);
-  assert.deepEqual(areaMap(null), ["", "          .       .", "      .      [@]      .", "          .       .", ""]);
+  assert.deepEqual([rows[0][18], rows[2][22], rows[4][18], rows[4][10], rows[2][6], rows[0][10]], [".", "O", "o", ".", "o", "O"]);
+  assert.deepEqual(areaMap(null), ["          .       .", "", "      .      [@]      .", "", "          .       ."]);
+});
+
+test("the area map joins [@] to the cells the hallways lead to, with thin lines: ------ sideways, / and \\ on the diagonals", () => {
+  const all = areaMap({ here: "entered", ring: Array(6).fill("new") }, Array(6).fill(true));
+  assert.deepEqual(all, ["          .       .", "           \\     /", "      .------[@]------.", "           /     \\", "          .       ."]);
+  const right = areaMap(null, [false, true, false, false, false, false]);
+  assert.equal(right[2], "      .      [@]------.", "a hallway going right on the room map is a line going right here");
+  assert.ok(!right.join("").includes("/") && !right.join("").includes("\\"));
+});
+
+test("which cells the first room leads out to: each wall without a door goes to a different cell of the ring, doors into the wing go nowhere", () => {
+  const links = exitSlots(CELL, floor), free = ["N", "E", "S", "W"].filter((d) => floor.rooms[0].doors[d] === undefined);
+  assert.equal(links.filter(Boolean).length, free.length);
+  const around = ring(CELL);
+  for (const d of free) assert.ok(links[around.indexOf(neighbour(CELL, d))], d + " leads out");
+  assert.deepEqual(exitSlots(CELL, null), Array(6).fill(false));
 });
 
 test("the panel header has the zoom button: [-] on the room map, [+] on the area map", () => {
   const st = { floor, ...FLOOR.arrive(floor), cell: CELL, tz: "Pacific/Honolulu", log: "", strict: true, map: [] };
   const now = new Date(Date.UTC(2026, 9, 16, 12));
   assert.match(renderScreen(st, now), /-+ MAP \[-\] -+/);
-  assert.match(renderScreen({ ...st, zoom: "area", map: areaMap(null) }, now), /-+ AREA \[\+\] -+/);
+  assert.match(renderScreen({ ...st, zoom: "area", map: areaMap(null, []) }, now), /-+ AREA \[\+\] -+/);
 });
 
 test("the page's client: load brings back the rooms you've stood in, and each step into a room is reported", async () => {

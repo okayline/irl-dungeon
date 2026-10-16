@@ -55,7 +55,7 @@
   import { openSave, api } from "./account.js";
   import { openFound } from "./found.js";
   import { openInvoke } from "./invoke.js";
-  import { areaMap } from "./area.js";
+  import { areaMap, exitSlots } from "./area.js";
 
   const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "Pacific/Honolulu"; } })();
@@ -98,12 +98,12 @@
   // [^] [v] inside brackets are marks, not arrows. The panel's own edges are left alone.
   function mapColor(right) {
     let out = "", k = 0;
-    const re = /[\[)][\^v][\](]|[@^v<>#:=*+\-|]/g; let m;
+    const re = /[\[)][\^v][\](]|[@^v<>#:=*+\-|\/\\]/g; let m;
     while ((m = re.exec(right))) {
       out += esc(right.slice(k, m.index)); k = m.index + m[0].length;
       const at = m.index, ch = m[0];
       if (ch.length === 3) out += esc(ch);
-      else if (/[+\-|]/.test(ch)) out += at === 0 || at === right.length - 1 ? ch : `<span class="wall">${ch}</span>`;
+      else if (/[+\-|\/\\]/.test(ch)) out += at === 0 || at === right.length - 1 ? ch : `<span class="wall">${ch}</span>`;
       else out += `<span class="${ch === "#" || ch === ":" || ch === "=" || ch === "*" ? "door" : "you"}">${esc(ch)}</span>`;
     }
     return out + esc(right.slice(k));
@@ -123,7 +123,7 @@
   }
 
   function draw() {
-    if (st.floor) { st.map = st.zoom === "area" ? areaMap(st.area) : FLOOR.minimap(st.floor, { ...st, visited: st.floor.rooms.map((r) => !!r) });      // no fog of war: every room the cell has built is drawn, walked or not st.first = firstLine(st); }
+    if (st.floor) { st.map = st.zoom === "area" ? areaMap(st.area, exitSlots(st.cell, st.floor)) : FLOOR.minimap(st.floor, { ...st, visited: st.floor.rooms.map((r) => !!r) });      // no fog of war: every room the cell has built is drawn, walked or not st.first = firstLine(st); }
     document.getElementById("screen").innerHTML = colorize(renderScreen(st, new Date()));
   }
   let savePanel = null;

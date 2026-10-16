@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.17 - Lines - Oct 15 2026, 11:30 PM HST
+
+- **The area map has lines.** A thin line joins you to each cell your first room's hallways lead out to: a hallway going right on the room map is a `------` going right on the area map (and `/` `\` for the diagonal ones). Cells with no line are the ones you'd only reach by walking there yourself.
+
 ## v0.16 - Clear Skies - Oct 15 2026, 11:20 PM HST
 
 - **No more fog of war.** The map shows every room of the cell that's been built, not just the ones you've walked in. Rooms you haven't been in yet are drawn too, so you can see where you're going. (What you've walked still counts for your cleared wings and the area map.)
