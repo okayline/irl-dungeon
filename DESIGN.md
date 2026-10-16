@@ -41,7 +41,7 @@ Status: **foundation plus 4Dungeon's floor generator** (players, save codes, pas
 ## Open questions
 
 1. **How many seasons does a cell spread sideways before the first layer below?** Decided for now: build sideways only, keep room to go down later.
-2. **What is "today" for the key?** UTC day (same instant for everyone; in Hawaii it flips at 2pm) or the player's local day (like 4Dungeon). The server can't know a time zone. Leaning local day with a guard: the claimed day must be within one of the UTC day and never earlier than the player's last key.
+2. **Checking the time zone.** Decided: the key's day is the player's **local day** (`src/day.js`). The browser sends only its UTC offset; the server applies it to its own clock, rejects offsets outside UTC-12:00 to UTC+14:00, and never lets a player's day go backwards. So the most a lie can buy is a key a few hours early or late. Still open: cross-check the claimed offset against the time zone Cloudflare infers from the player's IP (`request.cf.timezone`, free, no table), as a soft signal only (VPNs and phones on roaming make it wrong sometimes), and/or a cell-based zone lookup (a precise table is tens of MB).
 3. **Location can't be proven.** A browser can claim any cell. The stakes are cosmetic, so the defense is rate limits, not detection. Decide what, exactly, a claim can earn.
 4. **What does "first finder" attach to:** the cell, the layer, the day's wing, or a door?
 5. **Which way do layers go in the fiction?** 4Dungeon climbs up out of a pit; strata under a place sound like digging down.
