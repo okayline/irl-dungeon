@@ -2,6 +2,11 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.14 - Area - Oct 16 2026, 12:05 AM HST
+
+- **The map remembers on the server.** The rooms you've stood in are kept with your account, so the outline follows you to any device, and coming back to a cell shows where you've been.
+- **Zoom the map.** Press `+` or `-` (or click the button on the map's title) to switch between the room map and an AREA map. The area map has north always up: you in the middle, and along each way out of the first room the next cell, joined by a hallway. A cell shows `[ ]` if it's new, `[.]` if you've stood in it, `[o]` if you've walked its whole first wing.
+
 ## v0.13 - Hallways - Oct 15 2026, 11:35 PM HST
 
 - **The way out is a hallway.** In a cell's first room, every wall that leads out to the next cell now has a hallway drawn on the map out to its edge (`=` going sideways, `:` going up or down), so walking out feels like walking down a passage and not like stepping into a corner.

@@ -33,7 +33,9 @@ export async function load(st, api, offset = offsetNow()) {
   // wings already walked count as reported, so they aren't sent again
   const reported = floor.wings.map((w, i) => (r.completed.includes(wingKeyOf(floor, r.unlocks, i)) ? i : -1)).filter((i) => i >= 0);
   const firsts = Object.fromEntries((r.firsts || []).map((x) => [x.wing, x.name]));
-  const out = { ...st, loaded: true, keyReady: r.keyReady, doors: r.unlocks.slice(), reported, credit: r.credit, firsts, unsigned: (r.unsigned || []).slice(), signed: (r.signed || []).slice(), test: !!r.test };
+  const visited = st.visited.slice();                       // the rooms the server says you've stood in (the first room too)
+  for (const i of r.rooms || []) if (floor.rooms[i]) visited[i] = true;
+  const out = { ...st, visited, loaded: true, keyReady: r.keyReady, doors: r.unlocks.slice(), reported, credit: r.credit, firsts, unsigned: (r.unsigned || []).slice(), signed: (r.signed || []).slice(), test: !!r.test };
   if (r.credit === false) out.log = `> You got here fast. This cell earns nothing for ${waitText(r.waitSec)}.`;
   return out;
 }
@@ -46,7 +48,10 @@ const wingKeyOf = (floor, doors, i) => ["0", ...doors.slice(0, i)].join(">");
 export async function forward(st, api, offset = offsetNow()) {
   const { unlock, search: wall, ...moved } = step(st);
   if (wall !== undefined) return searchWall({ ...moved, confirm: undefined }, wall, api, offset);
-  if (unlock === undefined) return report({ ...moved, confirm: undefined }, api);
+  if (unlock === undefined) {
+    if (moved.at !== st.at && st.loaded) await ask(api, "rooms", { cell: st.cell, room: moved.at });      // the server keeps the rooms you've stood in
+    return report({ ...moved, confirm: undefined }, api);
+  }
   const s = { ...moved, log: st.log };
   if (!s.loaded) return { ...s, confirm: undefined, log: "> The door won't move yet. Still opening this cell." };
   if (s.keyReady === false) return { ...s, confirm: undefined, log: "> The door won't unlock. Today's key is spent. Another comes tomorrow." };
@@ -130,4 +135,11 @@ export async function unsignHere(st, api) {
   const r = await ask(api, "sign", { cell: st.cell, wing: k, unsign: true });
   if (r.error) return { ...st, log: "> " + r.error };
   return { ...st, firsts: { ...st.firsts, [k]: null }, signed: st.signed.filter((x) => x !== k), unsigned: [...(st.unsigned || []), k], log: "> Unsigned. Your name is off this wing." };
+}
+
+// The area map's data: how you stand with this cell and its neighbours (the server's answer), kept in st.area.
+export async function loadArea(st, api) {
+  if (!st.cell) return st;
+  const r = await ask(api, "area", { cell: st.cell });
+  return r.error ? st : { ...st, area: r };
 }

@@ -49,12 +49,13 @@
 <script type="module">
   import { renderScreen, VERSION, WORD } from "./screen.js";
   import { turn } from "./walk.js";
-  import { arrive, load, forward, turned, firstLine, signHere, unsignHere } from "./play.js";
+  import { arrive, load, forward, turned, firstLine, signHere, unsignHere, loadArea } from "./play.js";
   import FLOOR from "./floor.js";
   import { isCell, locate, neighbour } from "./place.js";
   import { openSave, api } from "./account.js";
   import { openFound } from "./found.js";
   import { openInvoke } from "./invoke.js";
+  import { areaMap } from "./area.js";
 
   const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "Pacific/Honolulu"; } })();
@@ -67,15 +68,12 @@
 
   let st = { tz, log: "" };
   // Arriving builds the cell's floor at once, then asks the server for this player's doors in it (src/worker.js).
-  // The rooms you've walked in each cell are remembered on this device, so coming back to a cell shows its outline again
-  // (and a cell you've never been in shows only its first room).
-  const roomsKey = cell => "irl-dungeon-rooms:" + cell;
-  const savedRooms = cell => { try { const l = JSON.parse(localStorage.getItem(roomsKey(cell)) || "[]"); return Array.isArray(l) ? l.filter(Number.isInteger) : []; } catch { return []; } };
-  const saveRooms = s => { try { localStorage.setItem(roomsKey(s.cell), JSON.stringify(s.visited.map((v, i) => (v ? i : -1)).filter((i) => i >= 0))); } catch { /* storage blocked: the map just starts fresh each time */ } };
   function arriveAt(cell, log = "> You arrive.", facing, came) {
-    st = arrive(cell, { tz, log, ...(facing ? { facing } : {}), ...(came ? { came } : {}) });
+    const zoom = st.zoom;
+    st = arrive(cell, { tz, log, zoom, ...(facing ? { facing } : {}), ...(came ? { came } : {}) });
+    if (zoom === "area") { const here = st; loadArea(st, api).then(s => { if (st.cell === here.cell) { st = { ...st, area: s.area }; draw(); } }); }
     const here = st;
-    load(st, api).then(s => { if (st.cell === here.cell && st.floor === here.floor) { const visited = st.visited.slice(); for (const i of savedRooms(s.cell)) if (s.floor.rooms[i]) visited[i] = true; st = { ...s, at: st.at, visited, facing: st.facing, log: s.log === here.log ? st.log : s.log }; draw(); } });
+    load(st, api).then(s => { if (st.cell === here.cell && st.floor === here.floor) { const visited = st.visited.slice(); s.visited.forEach((v, i) => { if (v) visited[i] = true; }); st = { ...s, at: st.at, visited, facing: st.facing, zoom: st.zoom, area: st.area, log: s.log === here.log ? st.log : s.log }; draw(); } });
   }
   if (isCell(fromAddress)) arriveAt(fromAddress);
   else fetch("/api/here").then(r => r.json()).then(d => {
@@ -116,7 +114,7 @@
       if (i >= 6 && i <= 22) {
         const l = line.slice(0, 49), r = line.slice(49);
         const L = esc(l).replace("[ &lt; ]", '<span class="btn" data-act="L">[ &lt; ]</span>').replace("[ &gt; ]", '<span class="btn" data-act="R">[ &gt; ]</span>').replace("[  ^  ]", '<span class="btn" data-act="W">[  ^  ]</span>');
-        const R = (i - 6 >= 9 && i - 6 <= 13 ? mapColor(r) : esc(r)).replace("[Y] SIGN IT", '<span class="btn" data-act="Y">[Y] SIGN IT</span>').replace("[U] UNSIGN", '<span class="btn" data-act="U">[U] UNSIGN</span>');
+        const R = (i - 6 >= 9 && i - 6 <= 13 ? mapColor(r) : esc(r)).replace("[-]", '<span class="btn" data-act="Z">[-]</span>').replace("[+]", '<span class="btn" data-act="Z">[+]</span>').replace("[Y] SIGN IT", '<span class="btn" data-act="Y">[Y] SIGN IT</span>').replace("[U] UNSIGN", '<span class="btn" data-act="U">[U] UNSIGN</span>');
         return L + R;
       }
       if (i === 28) return boxed(esc(line)).replace("[I]NVOKE", '<span class="btn" data-act="I">[I]NVOKE</span>').replace("[L]OCATE", '<span class="btn" data-act="G">[L]OCATE</span>').replace("[S]AVE", '<span class="btn" data-act="S">[S]AVE</span>');
@@ -125,8 +123,7 @@
   }
 
   function draw() {
-    if (st.floor) { st.map = FLOOR.minimap(st.floor, st); st.first = firstLine(st); }
-    if (st.floor && st.loaded) saveRooms(st);
+    if (st.floor) { st.map = st.zoom === "area" ? areaMap(st.floor, st.area) : FLOOR.minimap(st.floor, st); st.first = firstLine(st); }
     document.getElementById("screen").innerHTML = colorize(renderScreen(st, new Date()));
   }
   let savePanel = null;
@@ -154,6 +151,7 @@
   function act(a) {
     if (foundOpen() || invokeOpen()) return;
     if (a === "I") return openInvokePanel();
+    if (a === "Z") { st = { ...st, zoom: st.zoom === "area" ? "room" : "area" }; draw(); return st.zoom === "area" ? loadArea(st, api).then(s => { if (s.cell === st.cell) { st = { ...st, area: s.area }; draw(); } }) : undefined; }
     if (a === "S") return openSavePanel(); if (a === "G") return where();
     if (busy) return;
     if (a === "Y" || a === "U") { busy = true; return (a === "Y" ? signHere : unsignHere)(st, api).then(s => { busy = false; st = s; draw(); }); }
@@ -162,6 +160,7 @@
     forward(st, api).then(s => {
       busy = false; st = s;
       if (st.popup) { const item = st.popup; st = { ...st, popup: undefined }; showFound(item); }
+      if (st.zoom === "area" && !st.leave) loadArea(st, api).then(s => { if (s.cell === st.cell) { st = { ...st, area: s.area }; draw(); } });     // a wing walked in full changes the marks
       if (st.leave) { const dir = st.leave; arriveAt(neighbour(st.cell, dir), `> You walk out ${WORD[dir]}, along the hallway into the next cell.`, dir, { N: "S", S: "N", E: "W", W: "E" }[dir]); }
       draw();
     });
@@ -171,7 +170,7 @@
     if (invokeOpen()) { if (["Escape", "Enter", " ", "i", "I"].includes(e.key)) { e.preventDefault(); invokePanel && invokePanel.close(); } return; }
     if (foundOpen()) { if (["Escape", "Enter", " "].includes(e.key)) { e.preventDefault(); foundPanel && foundPanel.close(); } return; }
     if (saveOpen()) { if (e.key === "Escape" && savePanel) savePanel.close(); return; }     // the SAVE panel has the keyboard
-    const k = { ArrowLeft: "L", a: "L", A: "L", ArrowRight: "R", d: "R", D: "R", ArrowUp: "W", w: "W", W: "W", l: "G", L: "G", s: "S", S: "S", i: "I", I: "I", y: "Y", Y: "Y", u: "U", U: "U" }[e.key];
+    const k = { ArrowLeft: "L", a: "L", A: "L", ArrowRight: "R", d: "R", D: "R", "+": "Z", "=": "Z", "-": "Z", z: "Z", Z: "Z", ArrowUp: "W", w: "W", W: "W", l: "G", L: "G", s: "S", S: "S", i: "I", I: "I", y: "Y", Y: "Y", u: "U", U: "U" }[e.key];
     if (k && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); act(k); }
   });
   document.getElementById("ver").textContent = VERSION;

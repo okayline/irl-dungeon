@@ -192,3 +192,13 @@ CREATE TABLE IF NOT EXISTS finds (
   UNIQUE (item_id, copy)
 );
 CREATE INDEX IF NOT EXISTS finds_by_player ON finds (player_id, id);
+
+-- The rooms a player has stood in (migrations/008). Private: never published, never on the ledger.
+CREATE TABLE IF NOT EXISTS walked_rooms (
+  player_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  cell        TEXT NOT NULL,
+  layer       INTEGER NOT NULL DEFAULT 0,
+  room        INTEGER NOT NULL,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (player_id, cell, layer, room)
+);

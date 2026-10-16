@@ -20,11 +20,13 @@
 //   POST /api/cells {action: "save" | "forget", cell}   your saved cells (up to 20, listed in /api/account)
 //   POST /api/admin {action: "test", on, cell?}   admins only: test mode on (remembering the cell you're in) or off
 //                                     (answers `back`: that cell, to return to)
+//   POST /api/rooms {cell, room}      note that you stood in a room (the minimap's outline; private, nothing published)
+//   POST /api/area {cell}             for the cell and its N, E, S, W neighbours: "new", "entered" or "cleared" (first wing walked)
 //   POST /api/walk {cell, visited}    the rooms you've stood in; any wing this completes is recorded, and its first finder sealed
 
 import { GENESIS, sha256, verifyChain, head, chainInserts, isUnique, chainClash } from "./ledger.js";
 import FLOOR from "../public/floor.js";
-import { isCell, guessCell } from "../public/place.js";
+import { isCell, guessCell, neighbour } from "../public/place.js";
 import { travelCheck, waitText } from "./travel.js";
 import { nameText, freeName } from "./names.js";
 import { LAYER, buildFloor, wingKey, finishedWings } from "./game.js";
@@ -50,7 +52,7 @@ const ROUTES = {
   "GET /api/account": account, "POST /api/codes": codes, "POST /api/load": loadCode,
   "POST /api/passkey": passkey, "POST /api/logout": logout,
   "GET /api/ledger": ledger, "GET /api/here": here, "GET /api/verify": verify,
-  "POST /api/run": run, "POST /api/sign": sign, "POST /api/name": rename, "POST /api/cells": cells, "POST /api/admin": admin, "POST /api/unlock": unlock, "POST /api/walk": walk, "POST /api/search": search, "GET /api/finds": finds,
+  "POST /api/run": run, "POST /api/rooms": rooms, "POST /api/area": area, "POST /api/sign": sign, "POST /api/name": rename, "POST /api/cells": cells, "POST /api/admin": admin, "POST /api/unlock": unlock, "POST /api/walk": walk, "POST /api/search": search, "GET /api/finds": finds,
 };
 
 export default {
@@ -259,12 +261,43 @@ const dayOf = (ctx, offset, last) => { try { return dayFor(ctx.t, offset, last);
 // no signatures, nothing on the ledger, and its doors live in test_unlocks, which only that admin's test floors read.
 const testing = (me) => !!(me && me.admin && me.test_mode);
 
+// POST /api/rooms {cell, room}: this player stood in that room. Only rooms the cell really has (given the doors they have
+// unlocked) are kept, and only where the cell earns credit; in test mode nothing is kept. A private note: a cell id and a
+// room number.
+async function rooms(ctx) {
+  const b = await body(ctx), { db, env, req } = ctx;
+  if (!(await rateLimit(env, req, "rooms", 3000, 3600))) throw new Oops("Too many tries. Try again later.", 429);
+  need(Number.isInteger(b.room) && b.room >= 0, "That isn't a room.");
+  const r = await theRun(ctx, b, false);
+  need(r.floor.rooms[b.room], "That room isn't built.");
+  if (r.test) return { test: true };
+  needCredit(r);
+  await db.prepare("INSERT OR IGNORE INTO walked_rooms (player_id, cell, layer, room, created_at) VALUES (?,?,?,?,?)").bind(r.me.id, b.cell, LAYER, b.room, sec(ctx.t)).run();
+  return { ok: true };
+}
+
+// POST /api/area {cell}: how this player stands with the cell they are in and the four cells their walls lead out to (the
+// neighbour in each compass direction, public/place.js): "cleared" once they have walked the cell's first wing,
+// "entered" once they have stood in any of its rooms, else "new". Answers { here, N, E, S, W }. Test mode: all "new".
+async function area(ctx) {
+  const b = await body(ctx), { db, env, req } = ctx;
+  if (!(await rateLimit(env, req, "area", 1200, 3600))) throw new Oops("Too many tries. Try again later.", 429);
+  need(isCell(b.cell), "That isn't a cell.");
+  const me = await must(ctx), cells = { here: b.cell };
+  for (const d of ["N", "E", "S", "W"]) cells[d] = neighbour(b.cell, d);
+  if (testing(me)) return Object.fromEntries(Object.keys(cells).map((k) => [k, "new"]));
+  const ids = [...new Set(Object.values(cells))], marks = ids.map(() => "?").join(",");
+  const entered = new Set((await db.prepare(`SELECT DISTINCT cell FROM walked_rooms WHERE player_id = ? AND layer = ? AND cell IN (${marks})`).bind(me.id, LAYER, ...ids).all()).results.map((x) => x.cell));
+  const cleared = new Set((await db.prepare(`SELECT DISTINCT cell FROM completions WHERE player_id = ? AND layer = ? AND wing_key = '0' AND cell IN (${marks})`).bind(me.id, LAYER, ...ids).all()).results.map((x) => x.cell));
+  return Object.fromEntries(Object.entries(cells).map(([k, c]) => [k, cleared.has(c) ? "cleared" : entered.has(c) ? "entered" : "new"]));
+}
+
 async function run(ctx) {
   const b = await body(ctx), r = await theRun(ctx, b, true), { db } = ctx;
   if (r.test) {
     const firsts = (await db.prepare("SELECT f.wing_key, f.signed, p.name_a, p.name_b FROM wing_firsts f JOIN players p ON p.id = f.player_id WHERE f.cell = ? AND f.layer = ?").bind(b.cell, LAYER).all()).results
       .map((x) => ({ wing: x.wing_key, name: x.signed ? nameText(x.name_a, x.name_b) : null }));
-    return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed: [], keyReady: true, firsts, unsigned: [], signed: [], credit: true, test: true };
+    return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed: [], rooms: [], keyReady: true, firsts, unsigned: [], signed: [], credit: true, test: true };
   }
   const completed = (await db.prepare("SELECT wing_key FROM completions WHERE player_id = ? AND cell = ? AND layer = ?").bind(r.me.id, b.cell, LAYER).all()).results.map((x) => x.wing_key);
   const last = await lastKeyDay(ctx, r.me);
@@ -275,7 +308,9 @@ async function run(ctx) {
     .map((x) => ({ wing: x.wing_key, name: x.signed ? nameText(x.name_a, x.name_b) : null }));
   const mine = (await db.prepare("SELECT wing_key, signed FROM wing_firsts WHERE cell = ? AND layer = ? AND player_id = ?").bind(b.cell, LAYER, r.me.id).all()).results;
   const mineUnsigned = mine.filter((x) => !x.signed).map((x) => x.wing_key), mineSigned = mine.filter((x) => x.signed).map((x) => x.wing_key);
-  return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed, keyReady, firsts, unsigned: mineUnsigned, signed: mineSigned, credit: r.travel.ok, ...(r.travel.ok ? {} : { waitSec: r.travel.waitSec }) };
+  if (r.travel.ok) await db.prepare("INSERT OR IGNORE INTO walked_rooms (player_id, cell, layer, room, created_at) VALUES (?,?,?,0,?)").bind(r.me.id, b.cell, LAYER, sec(ctx.t)).run();   // arriving is standing in the first room
+  const walked = (await db.prepare("SELECT room FROM walked_rooms WHERE player_id = ? AND cell = ? AND layer = ? ORDER BY room").bind(r.me.id, b.cell, LAYER).all()).results.map((x) => x.room);
+  return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed, rooms: walked, keyReady, firsts, unsigned: mineUnsigned, signed: mineSigned, credit: r.travel.ok, ...(r.travel.ok ? {} : { waitSec: r.travel.waitSec }) };
 }
 
 async function unlock(ctx) {
