@@ -18,7 +18,7 @@ const deviceLabel = () => { const ua = navigator.userAgent; return /Android/.tes
 // refresh; `onClose()` when the player closes it. `cell()` is the cell you're in (for SAVE THIS CELL); `onGo(cell)`
 // takes you to a saved one.
 export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchApi = api, cell = () => null, onGo = () => {} } = {}) {
-  let newCode = null, msg = "", last = null, copied = false;
+  let newCode = null, msg = "", last = null, copied = false, rerollArmed = false;
   const pre = root.querySelector("pre");
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
   const line = (text = "", cls) => { const d = el("div", cls, text || " "); pre.appendChild(d); return d; };
@@ -54,7 +54,7 @@ export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchA
       line();
     }
     line(" NAME");
-    if (a.name) { row("   " + a.name + "  ", button("REROLL", reroll)); line("   Shown on finds you sign, with their cell.", "dim"); }
+    if (a.name) { row("   " + a.name + "  ", button(rerollArmed ? "YES, REROLL" : "REROLL", reroll), ...(rerollArmed ? ["  ", button("KEEP IT", () => { rerollArmed = false; msg = ""; paint(last); })] : [])); line("   Shown on finds you sign, with their cell.", "dim"); }
     else line("   None yet. Sign a find to get one.", "dim");
     line();
     const here = cell();
@@ -96,7 +96,12 @@ export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchA
     try { await navigator.clipboard.writeText(newCode); copied = true; paint(last); say("Copied. Keep it somewhere safe."); }
     catch { const c = pre.querySelector(".code"); if (c) { const r = document.createRange(); r.selectNodeContents(c); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } say("Couldn't copy. The code is selected: copy it by hand."); }
   }
-  async function reroll() { const r = await fetchApi("name", { action: "reroll" }); if (r.error) return say(r.error); msg = "Your name is now " + r.name + "."; draw(); }
+  // A reroll asks first: the old name can't be picked again (names are random), so a stray tap shouldn't lose it.
+  async function reroll() {
+    if (!rerollArmed) { rerollArmed = true; msg = "A new name? This one can't come back."; return paint(last); }
+    rerollArmed = false;
+    const r = await fetchApi("name", { action: "reroll" }); if (r.error) return say(r.error); msg = "Your name is now " + r.name + "."; draw();
+  }
   async function saveCell(c) { const r = await fetchApi("cells", { action: "save", cell: c }); if (r.error) return say(r.error); msg = "Saved."; draw(); }
   async function forgetCell(c) { const r = await fetchApi("cells", { action: "forget", cell: c }); if (r.error) return say(r.error); msg = "Forgotten."; draw(); }
   async function makeCode() { const r = await fetchApi("codes", { action: "new" }); if (r.error) return say(r.error); newCode = r.code; msg = ""; draw(); onChange(); }
