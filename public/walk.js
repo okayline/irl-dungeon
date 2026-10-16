@@ -1,6 +1,8 @@
 // Turning and walking, as in 4Dungeon. Turning is free. A step goes through the door you face. Stepping into a LOCKED
 // door unlocks it with the day's key (the server decides: `step` only says which door); you stay where you are, and
-// walking through the open door is a separate, free step. A wall or a sealed door only says so.
+// walking through the open door is a separate, free step. A sealed door only says so. A wall only says so too, except
+// in the cell's start room, where a wall is the way out: the step carries `leave: <N|E|S|W>` and the caller moves the
+// player to the next cell over that way (place.js `neighbour`).
 import { LEFT, RIGHT, WORD } from "./screen.js";
 
 const SEALED = ["The door is jammed shut. It won't open now.", "Something settled behind this door. It will not move.", "The frame has seized. This way is closed for good."];
@@ -24,7 +26,7 @@ export function facing(st) {
 export function step(st, pick = (a) => a[Math.floor(Math.random() * a.length)]) {
   if (!st.floor) return st;
   const f = facing(st);
-  if (f.kind === "wall") return { ...st, log: "> A wall." };
+  if (f.kind === "wall") return st.at === 0 ? { ...st, leave: st.facing } : { ...st, log: "> A wall." };
   if (f.kind === "sealed") return { ...st, log: "> " + pick(SEALED) };
   if (f.kind === "locked") return { ...st, unlock: f.door };
   const visited = st.visited.slice(); visited[f.door] = true;

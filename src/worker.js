@@ -10,13 +10,16 @@
 //   POST /api/logout                  this browser forgets its player (needs a save code or passkey first)
 //   GET  /api/ledger?before=&limit=   newest first: id, kind, record, prev_hash, hash, date (never who, never the time)
 //   GET  /api/verify                  checks the whole chain and returns its head (keep a copy: see ledger.js)
-//   POST /api/run {cell, offset?}     open a cell: the doors you've unlocked, the wings you've finished, whether today's key is ready
+//   GET  /api/here                    a rough first cell from the IP's approximate position (nothing stored; see place.js)
+//   POST /api/run {cell, offset?}     open a cell: the doors you've unlocked, the wings you've finished, whether today's key is
+//                                     ready, and whether the cell earns credit (the travel check, src/travel.js)
 //   POST /api/unlock {cell, door, offset}   spend today's key on a locked door (one a day, by your local day)
 //   POST /api/walk {cell, visited}    the rooms you've stood in; any wing this completes is recorded, and its first finder sealed
 
 import { GENESIS, sha256, verifyChain, head, chainInserts, isUnique, chainClash } from "./ledger.js";
 import FLOOR from "../public/floor.js";
-import { isCell } from "../public/place.js";
+import { isCell, guessCell } from "../public/place.js";
+import { travelCheck, waitText } from "./travel.js";
 import { LAYER, buildFloor, wingKey, finishedWings } from "./game.js";
 import { localDay, dayFor, offsetCheck, BadOffset } from "./day.js";
 import { MAX_CODES, newSaveCode, hashCode, newSession, newToken, rateLimit } from "./saves.js";
@@ -35,7 +38,7 @@ const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(d
 const ROUTES = {
   "GET /api/account": account, "POST /api/codes": codes, "POST /api/load": loadCode,
   "POST /api/passkey": passkey, "POST /api/logout": logout,
-  "GET /api/ledger": ledger, "GET /api/verify": verify,
+  "GET /api/ledger": ledger, "GET /api/here": here, "GET /api/verify": verify,
   "POST /api/run": run, "POST /api/unlock": unlock, "POST /api/walk": walk,
 };
 
@@ -216,7 +219,21 @@ async function theRun(ctx, b, create) {
   need(isCell(b.cell), "That isn't a cell.");
   const me = create ? await player(ctx, true) : await must(ctx);
   const doors = (await ctx.db.prepare("SELECT door FROM unlocks WHERE player_id = ? AND cell = ? AND layer = ? ORDER BY id").bind(me.id, b.cell, LAYER).all()).results.map((r) => r.door);
-  return { me, doors, floor: buildFloor(b.cell, doors) };
+  return { me, doors, floor: buildFloor(b.cell, doors), travel: await travel(ctx, me, b.cell) };
+}
+
+// The travel check (src/travel.js). A credited claim becomes the player's last place; one that isn't changes nothing.
+async function travel(ctx, me, cell) {
+  const t = sec(ctx.t), last = await ctx.db.prepare("SELECT cell, at FROM places WHERE player_id = ?").bind(me.id).first();
+  const c = travelCheck(last, cell, t);
+  if (c.ok) await ctx.db.prepare("INSERT INTO places (player_id, cell, at) VALUES (?,?,?) ON CONFLICT (player_id) DO UPDATE SET cell = excluded.cell, at = excluded.at").bind(me.id, cell, t).run();
+  return c;
+}
+const needCredit = (r) => { if (!r.travel.ok) throw new Oops(`That's a long way from where you just were. This cell earns nothing until ${waitText(r.travel.waitSec)} from now.`, 403); };
+
+// GET /api/here: the rough first cell. Makes no player and stores nothing.
+async function here(ctx) {
+  return { cell: guessCell(ctx.req.cf) };
 }
 
 const lastKeyDay = async (ctx, me) => (await ctx.db.prepare("SELECT MAX(day) AS d FROM unlocks WHERE player_id = ?").bind(me.id).first()).d;
@@ -228,7 +245,7 @@ async function run(ctx) {
   const last = await lastKeyDay(ctx, r.me);
   // keyReady is only worked out when the page says what time zone offset it is on
   const keyReady = b.offset === undefined ? null : dayOf(ctx, b.offset, last) > (last ?? -Infinity);
-  return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed, keyReady };
+  return { layer: LAYER, days: FLOOR.DAYS, unlocks: r.doors, completed, keyReady, credit: r.travel.ok, ...(r.travel.ok ? {} : { waitSec: r.travel.waitSec }) };
 }
 
 async function unlock(ctx) {
@@ -236,6 +253,7 @@ async function unlock(ctx) {
   if (!(await rateLimit(env, req, "unlock", 120, 3600))) throw new Oops("Too many tries. Try again later.", 429);
   need(Number.isInteger(b.door) && b.door >= 0, "That isn't a door.");
   const r = await theRun(ctx, b, false);
+  needCredit(r);
   const last = await lastKeyDay(ctx, r.me), day = dayOf(ctx, b.offset, last);
   if (last != null && day <= last) throw new Oops("The door won't unlock. Today's key is spent. Another comes tomorrow.", 403);
   need(FLOOR.lockedDoors(r.floor).includes(b.door), "That isn't a door you can unlock.");
@@ -252,6 +270,7 @@ async function walk(ctx) {
   const b = await body(ctx), { db, env, req } = ctx;
   if (!(await rateLimit(env, req, "walk", 240, 3600))) throw new Oops("Too many tries. Try again later.", 429);
   const r = await theRun(ctx, b, false);
+  needCredit(r);
   const fin = finishedWings(r.floor, r.doors, b.visited);
   need(fin.ok, fin.error);
   const have = new Set((await db.prepare("SELECT wing_key FROM completions WHERE player_id = ? AND cell = ? AND layer = ?").bind(r.me.id, b.cell, LAYER).all()).results.map((x) => x.wing_key));

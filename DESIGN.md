@@ -9,6 +9,11 @@ Status: **v0.03** (players, save codes, passkeys, the chained ledger, `public/fl
 **The world.**
 - A cell is an H3 hexagon at resolution 10, about 100 m across.
 - The server only ever sees cell IDs. The browser drops the coordinates.
+- **No location prompt needed.** The game never requires the browser's location (many people block it, and asking is a bit invasive). Instead:
+  - **A rough start from the server.** `GET /api/here` takes the approximate position Cloudflare puts on every request (from the IP, often off by kilometres), turns it into the ~1 km area around it (H3 resolution 7) and answers only the 100 m cell at that area's centre. Nothing is stored. The owner is fine with the server inferring roughly where a player is this way.
+  - **Walking between cells.** In a cell's start room, a wall is the way out: stepping into it moves you to the next cell that way (N, E, S or W: the touching hex closest to that bearing). That is how a player gets from the rough guess to their street.
+  - **The browser's location (L)** stays as an optional shortcut where the browser allows it. `?cell=<id>` still works.
+- **The travel check** (`src/travel.js`): location can't be proven, so the server checks that a player's claims make sense together. It keeps each player's last credited cell and when they claimed it (`places`, one row per player, never published). A cell is credited if reaching it was possible at 150 km/h plus 2 km of slack. A claim that wasn't can still be walked, but earns nothing (no unlock, no first find) until enough time has passed. Movement is never restricted otherwise.
 
 **Rules, from 4Dungeon.**
 - A wing is three or four spaces (a room, a passage, a dead end, sometimes a second room), joined by open doors. Wings hang locked doors.
@@ -43,7 +48,7 @@ Status: **v0.03** (players, save codes, passkeys, the chained ledger, `public/fl
 
 1. **How many seasons does a cell spread sideways before the first layer below?** Decided for now: build sideways only, keep room to go down later.
 2. **Checking the time zone.** Decided: the key's day is the player's **local day** (`src/day.js`). The browser sends only its UTC offset; the server applies it to its own clock, rejects offsets outside UTC-12:00 to UTC+14:00, and never lets a player's day go backwards. So the most a lie can buy is a key a few hours early or late. Still open: cross-check the claimed offset against the time zone Cloudflare infers from the player's IP (`request.cf.timezone`, free, no table), as a soft signal only (VPNs and phones on roaming make it wrong sometimes), and/or a cell-based zone lookup (a precise table is tens of MB).
-3. **Location can't be proven.** A browser can claim any cell. The stakes are cosmetic, so the defense is rate limits, not detection. Decide what, exactly, a claim can earn.
+3. **Location can't be proven.** A browser can claim any cell. The defense is rate limits and the travel check, not detection. Still open: whether 150 km/h is right (a flight is legitimate but waits a day or so for credit), and whether a brand-new player's first claim should count for less.
 4. **Which way do layers go in the fiction?** 4Dungeon climbs up out of a pit; strata under a place sound like digging down.
 5. **Anchoring the head.** A chain can't show that its newest entries were dropped. Publish the head hash somewhere outside the database (see `src/ledger.js`).
 6. **Real-world safety.** A game that rewards visiting places can send people onto roads or private land. It needs a line in the game and in the about page.
@@ -60,7 +65,7 @@ Trimmed from `daily-dungeon/floor.js` (43cebc2): wing layout and door/sealing co
 
 ## The screen
 
-`public/screen.js` is 4Dungeon's 80-column frame with only what this game has: the moon-and-date header, the 3D view, a right panel (cell id, wing, room, the minimap), three log lines (what is here, what you just did, what is ahead) and a keys line. Party, HP/MP, silver, ichor, breath, the title, sky, fights and bag are removed. The minimap is 4Dungeon's, without its locker and stairs marks. The page finds the cell with the browser's location (press L; the browser asks first): `public/place.js` turns the position into a resolution-10 cell id with the vendored h3-js and drops the coordinates. `?cell=<id>` still works to look at any cell. The shared seed comes from `FLOOR.seedFor(cell, layer)` (FNV-1a, provisional). A locked door says it is locked: opening one needs the key, which needs the server.
+`public/screen.js` is 4Dungeon's 80-column frame with only what this game has: the moon-and-date header, the 3D view, a right panel (cell id, wing, room, the minimap), three log lines (what is here, what you just did, what is ahead) and a keys line. Party, HP/MP, silver, ichor, breath, the title, sky, fights and bag are removed. The minimap is 4Dungeon's, without its locker and stairs marks. The page starts at `?cell=<id>` if given, or else at the server's rough guess (`GET /api/here`), and the player walks out of a start room into the next cell. Pressing L uses the browser's location instead, where allowed: `public/place.js` turns the position into a resolution-10 cell id with the vendored h3-js and drops the coordinates. In a start room the ahead line says "the way out, to the next cell" for a wall. The shared seed comes from `FLOOR.seedFor(cell, layer)` (FNV-1a, provisional). A locked door says it is locked: opening one needs the key, which needs the server.
 
 The keys line also has `[S]AVE`, which opens a panel inside the 3D view (like 4Dungeon's bag): make or forget save codes (shown once), add or forget passkeys, log in with a code or a passkey, log out (the server only allows it once a way back exists).
 

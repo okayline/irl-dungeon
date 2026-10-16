@@ -201,7 +201,7 @@ function describe(st) {
   const built = j => !!f.rooms[j], dirs = Object.keys(room.doors);
   const open = dirs.filter(d => built(room.doors[d])), locked = dirs.filter(d => !built(room.doors[d]));
   const ahead = room.doors[st.facing];
-  const aheadWord = ahead === undefined ? "a wall" : built(ahead) ? "an open doorway" : f.sealed && f.sealed[ahead] ? "a sealed door" : "a locked door";
+  const aheadWord = ahead === undefined ? (st.at === 0 ? "the way out, to the next cell" : "a wall") : built(ahead) ? "an open doorway" : f.sealed && f.sealed[ahead] ? "a sealed door" : "a locked door";
   return { room, open, locked, aheadWord, ahead };
 }
 

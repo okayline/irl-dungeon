@@ -118,3 +118,11 @@ CREATE TABLE IF NOT EXISTS wing_firsts (
   created_at  INTEGER NOT NULL,
   PRIMARY KEY (cell, layer, wing_key)
 );
+
+-- Each player's last credited cell and when they claimed it (seconds), for the travel check (src/travel.js). One row
+-- per player, overwritten; never published.
+CREATE TABLE IF NOT EXISTS places (
+  player_id   INTEGER PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+  cell        TEXT NOT NULL,
+  at          INTEGER NOT NULL
+);

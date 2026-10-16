@@ -46,24 +46,30 @@
     <div id="save" class="viewpop" role="dialog" aria-modal="true" aria-label="Save codes and passkeys" hidden><pre></pre></div><div id="ver" class="ver"></div></div>
 <script type="module">
   import FLOOR from "./floor.js";
-  import { renderScreen, VERSION } from "./screen.js";
+  import { renderScreen, VERSION, WORD } from "./screen.js";
   import { turn, step } from "./walk.js";
-  import { isCell, locate } from "./place.js";
+  import { isCell, locate, neighbour } from "./place.js";
   import { openSave } from "./account.js";
 
   const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "Pacific/Honolulu"; } })();
 
-  // The cell comes from the browser's position (press L), turned into a cell id at once; the coordinates are dropped.
-  // ?cell=<id> still works, to look at any cell without being there. The server only ever sees cell ids.
+  // The first cell is ?cell=<id> if the address has one, or else the server's rough guess from the connection (GET
+  // /api/here: the centre of a ~1 km area, no prompt, nothing stored). From there the player walks out of a cell's start
+  // room into the next one. L uses the browser's position instead, where the browser allows it; its coordinates are
+  // turned into a cell id at once and dropped. The server only ever sees cell ids.
   const fromAddress = (new URLSearchParams(location.search).get("cell") || "").toLowerCase();
 
   let st = { tz, log: "" };
-  function arriveAt(cell) {
+  function arriveAt(cell, log = "> You arrive.", facing) {
     const floor = FLOOR.generate(FLOOR.seedFor(cell, 0), undefined, { days: FLOOR.DAYS });
-    st = { tz, cell, floor, ...FLOOR.arrive(floor), log: "> You arrive." };
+    const a = FLOOR.arrive(floor);
+    st = { tz, cell, floor, ...a, ...(facing ? { facing } : {}), log };
   }
   if (isCell(fromAddress)) arriveAt(fromAddress);
+  else fetch("/api/here").then(r => r.json()).then(d => {
+    if (!st.cell && d && isCell(d.cell)) { arriveAt(d.cell, "> You arrive somewhere near. Walk out of this first room to find your street."); draw(); }
+  }).catch(() => {});
 
   let locating = false;
   async function where() {
@@ -111,7 +117,12 @@
     const box = document.getElementById("save"); box.hidden = false; placeInView(box);
     savePanel = openSave(box, { onClose: () => { savePanel = null; } });
   }
-  function act(a) { if (a === "S") return openSavePanel(); if (a === "G") return where(); st = a === "W" ? step(st) : turn(st, a); draw(); }
+  function act(a) {
+    if (a === "S") return openSavePanel(); if (a === "G") return where();
+    st = a === "W" ? step(st) : turn(st, a);
+    if (st.leave) { const dir = st.leave; arriveAt(neighbour(st.cell, dir), `> You walk out ${WORD[dir]}, into the next cell.`, dir); }
+    draw();
+  }
   document.getElementById("screen").addEventListener("click", e => { const a = e.target.closest && e.target.closest("[data-act]"); if (a) act(a.dataset.act); });
   addEventListener("keydown", e => {
     if (saveOpen()) { if (e.key === "Escape" && savePanel) savePanel.close(); return; }     // the SAVE panel has the keyboard
