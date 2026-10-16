@@ -1,7 +1,7 @@
 // irl-dungeon floor generator: TRIMMED from okayline/daily-dungeon floor.js (4Dungeon), commit 43cebc2.
 // Kept: the wing layout code and the door/sealing rules, as 4Dungeon has them. Removed: everything a room holds
 // (room kinds, demons, items, silver, clues, the locker, bonus and void rooms, painted doors) and everything that
-// draws a screen (minimap, heat map). Rooms are empty for now.  Comments below are 4Dungeon's, lightly edited.
+// draws a screen (the heat map; the minimap is kept, without the locker and stairs marks). Rooms are empty for now.  Comments below are 4Dungeon's, lightly edited.
 //
 // A floor is a chain of WINGS, each a small cluster of three spaces joined by open doors. Each wing but the last
 // two hangs two LOCKED doors: unlocking one seals the other. The room behind a door is the first space of the next
@@ -170,7 +170,85 @@ const FLOOR = (() => {
   // A door whose offer was settled the other way: it stays shut for good.
   const isSealed = (floor, from, dir) => { const i = floor.rooms[from].doors[dir]; return i !== undefined && !floor.rooms[i] && !!(floor.sealed && floor.sealed[i]); };
 
-  const api = { generate, grow, rng, isSealed, symTransform, DAYS };
+  // Minimap: only rooms you has been in are drawn, with door stubs leading out of them.
+  // A passage has no brackets; a locked door shows #; a sealed one is plain wall.
+  // state: { at: room index, visited: [bool per room], facing }
+  // The map is centered on you: her room is always in the middle and the floor moves around her.
+  // Rooms two steps away up or down fall outside the 5 rows and stay off the map.
+  function minimap(floor, state) {
+    // One symbol per room: [@] you, [v] where you started (the way up), [ ] a visited room. Open doors are blank gaps.
+    const W = 29, H = 5, rows = Array.from({ length: H }, () => Array(W).fill(" "));
+    const put = (r, c, s) => [...s].forEach((ch, k) => {
+      if (r >= 0 && r < H && c + k >= 0 && c + k < W) rows[r][c + k] = ch;
+    });
+    const here = floor.rooms[state.at];
+    // Every room you has been in is outlined in + - | walls (neighbors share a wall), opened wherever there is a door
+    // (open, locked, false or sealed), so a corner next to a door turns into - or |.
+    const seen = [];
+    floor.rooms.forEach((room, i) => {
+      if (room && state.visited[i]) seen.push({ i, room, row: 2 + (room.r - here.r) * 2, col: 13 + (room.c - here.c) * 4 });
+    });
+    const wall = Array.from({ length: H }, () => Array(W).fill(false)), vert = Array.from({ length: H }, () => Array(W).fill(false));
+    const mark = (r, c, v) => { if (r >= 0 && r < H && c >= 0 && c < W) wall[r][c] = v; };
+    for (const { row, col } of seen)
+      for (let r = row - 1; r <= row + 1; r++) for (let c = col - 1; c <= col + 3; c++) if (r !== row || c === col - 1 || c === col + 3) {
+        mark(r, c, true);
+        if ((c === col - 1 || c === col + 3) && r >= 0 && r < H && c >= 0 && c < W) vert[r][c] = true;   // a side wall keeps going past the edge of the window
+      }
+    // Rooms of one wing read as a single big room: their doors are just gaps in the wall, with no door mark.
+    const same = (room, d) => { const o = floor.rooms[room.doors[d]]; return !!o && o.wing === room.wing && state.visited[room.doors[d]]; };
+    const open = (row, col, d) => {
+      if (d === "E") mark(row, col + 3, false); if (d === "W") mark(row, col - 1, false);
+      if (d === "S") for (let k = 0; k < 3; k++) mark(row + 1, col + k, false);
+      if (d === "N") for (let k = 0; k < 3; k++) mark(row - 1, col + k, false);
+    };
+    for (const { room, row, col } of seen) { for (const d of Object.keys(room.doors)) open(row, col, d); }
+    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (wall[r][c]) {
+      const n = r > 0 ? wall[r - 1][c] : vert[r][c], s = r < H - 1 ? wall[r + 1][c] : vert[r][c], w = c > 0 && wall[r][c - 1], e = c < W - 1 && wall[r][c + 1];
+      rows[r][c] = (n || s) && (w || e) ? "+" : n || s ? "|" : "-";
+    }
+    seen.forEach(({ i, room, row, col }) => {
+      const mark = state.at === i ? "@" : i === floor.start ? "v" : " ";
+      put(row, col, room.hall ? " " + mark + " " : "[" + mark + "]");   // a passage has no brackets: blank, or just your @ (or a mark)
+      // Door marks sit in the opened gaps: an open door is just blank, # for a locked or false one; a sealed one is plain wall.
+      const stub = (d, locked) => {
+        if (d === "E") put(row, col + 3, locked ? "#" : " ");
+        if (d === "W") put(row, col - 1, locked ? "#" : " ");
+        if (d === "S") put(row + 1, col + 1, locked ? "#" : " ");
+        if (d === "N") put(row - 1, col + 1, locked ? "#" : " ");
+      };
+      for (const d of Object.keys(room.doors)) {
+        const j = room.doors[d], shut = !floor.rooms[j];
+        if (same(room, d)) continue;                              // inside a wing: one big room, no door mark
+        stub(d, shut);
+        if (shut && floor.sealed && floor.sealed[j]) {            // a sealed door shows x
+          if (d === "E") put(row, col + 3, "|"); if (d === "W") put(row, col - 1, "|");
+          if (d === "S") put(row + 1, col + 1, "-"); if (d === "N") put(row - 1, col + 1, "-");
+        }
+      }
+    });
+    // your facing: an arrow in the gap on that side of her room. A locked door's # always stays on top of it.
+    const f = state.facing, arrow = (r, c, ch) => { if (rows[r][c] !== "#") put(r, c, ch); };
+    if (f === "E") arrow(2, 16, ">"); else if (f === "W") arrow(2, 12, "<");
+    else if (f === "N") arrow(1, 14, "^"); else if (f === "S") arrow(3, 14, "v");
+    return rows.map(r => r.join("").replace(/\s+$/, ""));
+  }
+
+  // The shared seed for one cell's layer. Provisional: the layer index is 0 until seasons exist, and the server will
+  // use this same function to check a player's unlocks. FNV-1a over the text, so the same cell and layer always
+  // give the same floor.
+  function seedFor(cell, layer = 0) {
+    let h = 0x811c9dc5;
+    for (const ch of `irl|${cell}|${layer}`) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h >>> 0;
+  }
+
+  // A fresh floor as you arrive: only the first wing is known.
+  function arrive(floor) {
+    return { at: 0, visited: [true], facing: Object.keys(floor.rooms[0].doors)[0] };
+  }
+
+  const api = { generate, grow, minimap, arrive, seedFor, rng, isSealed, symTransform, DAYS };
   return api;
 })();
 export default FLOOR;

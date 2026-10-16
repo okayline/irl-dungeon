@@ -2,7 +2,7 @@
 // by walking floors the way a player does, never by asking the code what it thinks the answer is.
 import test from "node:test";
 import assert from "node:assert/strict";
-import FLOOR from "../src/floor.js";
+import FLOOR from "../public/floor.js";
 
 const seeds = (n) => Array.from({ length: n }, (_, i) => [Math.imul(i + 1, 2654435761) >>> 0, Math.imul(i + 9, 40503) >>> 0, 3 + (i % 5)]);
 

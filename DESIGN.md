@@ -2,7 +2,7 @@
 
 4Dungeon in the real world. Every place on Earth is a cell; every cell is a dungeon that grows over time. 4Dungeon is the core game and the model: when this document is silent, do what 4Dungeon does.
 
-Status: **foundation plus 4Dungeon's floor generator** (players, save codes, passkeys, the chained ledger, `src/floor.js`). No game yet.
+Status: **foundation plus a first screen** (players, save codes, passkeys, the chained ledger, `public/floor.js`, and the page: 4Dungeon's screen and minimap on an empty-rooms floor; turn and walk only).
 
 ## Settled
 
@@ -50,7 +50,7 @@ Status: **foundation plus 4Dungeon's floor generator** (players, save codes, pas
 8. **Signing.** Signing a find ties a consistent name to a trail of cells. The old version offered it; decide whether to keep it, and how to say what it reveals.
 9. **Hosting address.** Live at `irl-dungeon.ddddungeon.workers.dev`. Custom domain `irl.88x31.app` added in Cloudflare on 2026-10-15 (HST). Passkeys belong to one address, so pick the one to use before anyone registers a passkey.
 
-## `src/floor.js` (copied from 4Dungeon)
+## `public/floor.js` (trimmed from 4Dungeon)
 
 Trimmed from `daily-dungeon/floor.js` (43cebc2): wing layout and door/sealing code kept, module wrapper added, and all room contents (kinds, demons, items, silver, clues, locker, bonus, void, painted doors) and the minimap/heat map removed. **Rooms are empty for now.** Without kinds, the two doors of a pair differ only in where they lead. The map drawing can be copied back from 4Dungeon when there is a screen. `test/floor.test.mjs` checks 4Dungeon's rules from outside. Findings:
 - A walk builds days+1 wings, not four as its header says.
@@ -58,6 +58,10 @@ Trimmed from `daily-dungeon/floor.js` (43cebc2): wing layout and door/sealing co
 - `floor.stuck` is reachable: about 1 in 700 greedy walks on 6 to 7 day floors (the header says never in practice). Worth fixing in 4Dungeon too.
 - **Open: what do rooms hold?** Empty for now.
 - The server can only check an unlock if it knows the shared seed and the player's private `pseed`/`sym` (door directions are rotated per player).
+
+## The screen
+
+`public/screen.js` is 4Dungeon's 80-column frame with only what this game has: the moon-and-date header, the 3D view, a right panel (cell id, wing, room, the minimap), three log lines (what is here, what you just did, what is ahead) and a keys line. Party, HP/MP, silver, ichor, breath, the title, sky, fights and bag are removed. The minimap is 4Dungeon's, without its locker and stairs marks. The page takes the cell from `?cell=`; geolocation to an H3 cell is not built, and the shared seed comes from `FLOOR.seedFor(cell, layer)` (FNV-1a, provisional). A locked door says it is locked: opening one needs the key, which needs the server.
 
 ## Recoverable from the old version
 

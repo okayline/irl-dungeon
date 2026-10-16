@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>irl-dungeon</title>
+<style>
+  /* VT323, self-hosted (fonts/OFL.txt has its license). Same screen styling as 4Dungeon. */
+  @font-face { font-family: "VT323"; src: url("fonts/VT323-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+  :root { --bg: #07090a; --fg: #e4e4df; --dim: #4f5d52; --trail: #8f8f8a; --bright: #ffffff; --moon: #9fc4ff; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); }
+  body { -webkit-user-select: none; user-select: none; min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+    font-family: "VT323", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-variant-ligatures: none; }
+  .frame { max-width: 100%; overflow-x: auto; position: relative; }
+  pre { margin: 0; font-family: inherit; line-height: 1.05; font-size: clamp(6px, calc((100vw - 32px) / 49), 22px);
+    white-space: pre; text-shadow: 0 0 4px rgba(228, 228, 223, 0.2); }
+  .you { color: var(--bright); text-shadow: 0 0 6px var(--bright); }
+  .moon { color: var(--moon); }
+  .door { color: var(--trail); }
+  .btn { cursor: pointer; color: var(--bright); }
+  .btn:hover { background: var(--fg); color: var(--bg); }
+  /* The weekday kanji takes exactly two character cells, so the frame stays straight. */
+  .kanji { display: inline-block; width: 2ch; text-align: center; overflow: visible; white-space: nowrap; }
+  .kanji .g { font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "MS Gothic", sans-serif; line-height: 0; font-size: 0.8em; }
+  .cell { display: inline-block; width: 1ch; text-align: center; overflow: visible; white-space: nowrap; }
+  .cell .g { font-family: "DejaVu Sans Mono", Menlo, Consolas, "Segoe UI Symbol", monospace; line-height: 0; }
+</style>
+</head>
+<body>
+  <div class="frame"><pre id="screen">LOADING...</pre></div>
+<script type="module">
+  import FLOOR from "./floor.js";
+  import { renderScreen } from "./screen.js";
+  import { turn, step } from "./walk.js";
+
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "Pacific/Honolulu"; } })();
+
+  // The cell. For now it comes from the address (?cell=<H3 cell id, resolution 10>); the browser's location comes
+  // later. The server only ever sees cell ids.
+  const cellId = (new URLSearchParams(location.search).get("cell") || "").toLowerCase();
+  const validCell = /^8a[0-9a-f]{13}$/.test(cellId);
+
+  // The private seed (map rotation) belongs to this browser. It is kept so the map doesn't spin between visits.
+  function privateSeed() {
+    try {
+      let v = Number(localStorage.getItem("irl-pseed"));
+      if (!Number.isInteger(v) || v <= 0) { v = (crypto.getRandomValues(new Uint32Array(1))[0] || 1); localStorage.setItem("irl-pseed", String(v)); }
+      return v >>> 0;
+    } catch { return crypto.getRandomValues(new Uint32Array(1))[0] >>> 0; }
+  }
+
+  let st = { tz, log: "" };
+  if (validCell) {
+    const floor = FLOOR.generate(FLOOR.seedFor(cellId, 0), privateSeed(), { days: FLOOR.DAYS });
+    st = { tz, cell: cellId, floor, ...FLOOR.arrive(floor), log: "> You arrive." };
+  }
+
+  // Colors: only the things 4Dungeon colors on this screen: your @, the locked-door #, the moon, and the buttons.
+  // Every character outside plain ASCII sits in a box exactly one cell wide (a kanji, two), so the frame stays
+  // straight whatever font the browser falls back to for it.
+  const boxed = html => html.replace(/[\u3040-\u30ff\u4e00-\u9fff]/g, c => `<span class="kanji"><span class="g">${c}</span></span>`)
+    .replace(/[^\x00-\x7f]/g, c => `<span class="cell${/[░▓█]/.test(c) ? " moon" : ""}"><span class="g">${c}</span></span>`);
+  function colorize(text) {
+    return text.split("\n").map((line, i) => {
+      if (i >= 1 && i <= 4) return boxed(i === 2 ? esc(line).replace(/[()O]+/g, m => `<span class="moon">${m}</span>`) : esc(line));
+      if (i >= 6 && i <= 22) {
+        const l = line.slice(0, 49), r = line.slice(49);
+        const L = esc(l).replace("[ &lt; ]", '<span class="btn" data-act="L">[ &lt; ]</span>').replace("[ &gt; ]", '<span class="btn" data-act="R">[ &gt; ]</span>').replace("[  ^  ]", '<span class="btn" data-act="W">[  ^  ]</span>');
+        const R = esc(r).replace("@", '<span class="you">@</span>').replace(/#/g, '<span class="door">#</span>');
+        return L + R;
+      }
+      return boxed(esc(line));
+    }).join("\n");
+  }
+
+  function draw() {
+    if (st.floor) st.map = FLOOR.minimap(st.floor, st);
+    document.getElementById("screen").innerHTML = colorize(renderScreen(st, new Date()));
+  }
+  function act(a) { st = a === "W" ? step(st) : turn(st, a); draw(); }
+  document.getElementById("screen").addEventListener("click", e => { const a = e.target.closest && e.target.closest("[data-act]"); if (a) act(a.dataset.act); });
+  addEventListener("keydown", e => {
+    const k = { ArrowLeft: "L", a: "L", A: "L", ArrowRight: "R", d: "R", D: "R", ArrowUp: "W", w: "W", W: "W" }[e.key];
+    if (k && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); act(k); }
+  });
+  draw();
+  setInterval(draw, 30000);   // the header clock
+</script>
+</body>
+</html>
