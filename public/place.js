@@ -14,13 +14,21 @@ export const cellFromLatLng = (lat, lng) => {
 export const isCell = (s) => typeof s === "string" && isValidCell(s) && getResolution(s) === RES;
 
 // Ask the browser where it is (it asks the person first) and answer with a cell id, or throw a sentence for the log.
-export function locate(geo = typeof navigator !== "undefined" ? navigator.geolocation : null) {
+// The browser's own timeout only starts once the person has answered its permission question, so if that question is
+// hidden (an in-app browser, a blocked site) it would wait forever; `giveUpMs` is ours, and covers the whole wait.
+export async function locate(geo = typeof navigator !== "undefined" ? navigator.geolocation : null, giveUpMs = 25000, perms = typeof navigator !== "undefined" ? navigator.permissions : null) {
+  if (!geo) throw new Error("This browser can't find where it is.");
+  try {
+    const p = perms && perms.query ? await perms.query({ name: "geolocation" }) : null;
+    if (p && p.state === "denied") throw new Error("Location is blocked for this site. Allow it in the browser's site settings, then try again.");
+  } catch (e) { if (/blocked for this site/.test(e.message)) throw e; }     // a browser that can't say is simply asked
   return new Promise((resolve, reject) => {
-    if (!geo) return reject(new Error("This browser can't find where it is."));
+    const timer = setTimeout(() => reject(new Error("No answer. This browser may be hiding the location question; try a regular browser (Safari or Chrome) instead of an app's built-in one.")), giveUpMs);
+    const done = (f, v) => { clearTimeout(timer); f(v); };
     geo.getCurrentPosition(
-      (pos) => { try { resolve(cellFromLatLng(pos.coords.latitude, pos.coords.longitude)); } catch (e) { reject(e); } },
-      (err) => reject(new Error(err && err.code === 1 ? "Location is off for this page." : err && err.code === 3 ? "Finding you took too long." : "Couldn't find you.")),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+      (pos) => { try { done(resolve, cellFromLatLng(pos.coords.latitude, pos.coords.longitude)); } catch (e) { done(reject, e); } },
+      (err) => done(reject, new Error(err && err.code === 1 ? "Location is off for this page." : err && err.code === 3 ? "Finding you took too long." : "Couldn't find you.")),
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
     );
   });
 }

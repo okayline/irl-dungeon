@@ -62,3 +62,21 @@ test("locate explains refusals in a sentence", async () => {
   await assert.rejects(locate(null), /can't find where it is/);
   await assert.rejects(locate({ getCurrentPosition: (ok) => ok({ coords: { latitude: 999, longitude: 0 } }) }), /isn't a place on Earth/);
 });
+
+test("a browser that never answers is given up on, with a sentence (the screen must not wait forever)", async () => {
+  const silent = { getCurrentPosition: () => {} };
+  const t0 = Date.now();
+  await assert.rejects(locate(silent, 50, null), /No answer/);
+  assert.ok(Date.now() - t0 < 1000);
+});
+
+test("a site the browser has blocked is told so before asking", async () => {
+  let asked = false;
+  const geo = { getCurrentPosition: () => { asked = true; } };
+  await assert.rejects(locate(geo, 50, { query: async () => ({ state: "denied" }) }), /blocked for this site/);
+  assert.equal(asked, false);
+  // 'granted', 'prompt', a browser with no permissions API, and one whose query throws all go on to ask
+  const ok = { getCurrentPosition: (res) => res({ coords: { latitude: 21.3069, longitude: -157.8583 } }) };
+  for (const perms of [{ query: async () => ({ state: "granted" }) }, { query: async () => ({ state: "prompt" }) }, null, { query: async () => { throw new Error("nope"); } }])
+    assert.equal(isCell(await locate(ok, 50, perms)), true);
+});
