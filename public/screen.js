@@ -236,12 +236,12 @@ function renderScreen(st, now) {
   // ---- the three log lines: what is here, what you just did, what is ahead
   const r = s => "|" + ljust(s.slice(0, W_ - 2), W_ - 2) + "|";
   const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
-  const flavor = !d ? "> No cell yet." : `> ${here === "ROOM" ? "A bare room" : here === "PASSAGE" ? "A passage" : "A dead end"}. ${plural(d.open.length, "open doorway", "open doorways")}, ${d.locked.length} locked.`;
+  const flavor = !d ? "> No cell yet. Press L to find where you are." : `> ${here === "ROOM" ? "A bare room" : here === "PASSAGE" ? "A passage" : "A dead end"}. ${plural(d.open.length, "open doorway", "open doorways")}, ${d.locked.length} locked.`;
   const doing = st.log || "";
   const ahead = !d ? "" : `> You face ${WORD[st.facing]}: ${d.aheadWord}.`;
   for (const m of [" " + flavor, " " + doing, " " + ahead]) S.push(r(m));
   S.push("+" + "-".repeat(78) + "+");
-  const menu = d ? " TURN: [A] [D] OR ARROWS    WALK: [W] OR UP" : "";
+  const menu = (d ? " TURN: [A] [D] OR ARROWS    WALK: [W] OR UP    " : " ") + "[L]OCATE";
   S.push("|" + menu + " ".repeat(78 - menu.length) + "|");
   S.push("+" + "=".repeat(78) + "+");
   return finishFrame(S, st.strict);

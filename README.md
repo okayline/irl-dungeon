@@ -7,7 +7,7 @@
 ## Run it
 
 ```
-npm test                  # 86 tests (Node 22+, built-in SQLite standing in for D1)
+npm test                  # 93 tests (Node 22+, built-in SQLite standing in for D1)
 npx wrangler d1 create irl-dungeon-db     # paste the id into wrangler.jsonc
 npx wrangler d1 execute irl-dungeon-db --local --file=schema.sql
 npx wrangler dev
@@ -18,7 +18,8 @@ npx wrangler dev
 - `src/ledger.js`: the hash chain (`seal`, `verifyChain`).
 - `src/worker.js`: the API, and serves `public/`.
 - `public/floor.js`: 4Dungeon's floor generator and minimap, trimmed (empty rooms). In `public/` because the page and the Worker both use it.
-- `public/screen.js`, `public/walk.js`, `public/index.html`: 4Dungeon's 80-column screen, trimmed to what this game has; turning and walking; the page. Open it with `?cell=<H3 id at resolution 10>` (the browser's location comes later), e.g. `/?cell=8a2a1072b59ffff`.
+- `public/screen.js`, `public/walk.js`, `public/index.html`: 4Dungeon's 80-column screen, trimmed to what this game has; turning and walking; the page. Press L to use the browser's location, or open it with `?cell=<H3 id at resolution 10>`, e.g. `/?cell=8a2a1072b59ffff`.
+- `public/place.js`, `public/vendor/`: position to cell id (the coordinates are dropped at once), and Uber's h3-js (Apache-2.0).
 - `src/saves.js`, `src/passkeys.js`: save codes and passkeys, copied from dawn-baton.
 - `schema.sql`: the database tables.
 - `test/`: tests that try to break the rules (see `CLAUDE.md`).

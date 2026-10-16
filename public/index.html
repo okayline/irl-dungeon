@@ -33,14 +33,14 @@
   import FLOOR from "./floor.js";
   import { renderScreen } from "./screen.js";
   import { turn, step } from "./walk.js";
+  import { isCell, locate } from "./place.js";
 
   const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "Pacific/Honolulu"; } })();
 
-  // The cell. For now it comes from the address (?cell=<H3 cell id, resolution 10>); the browser's location comes
-  // later. The server only ever sees cell ids.
-  const cellId = (new URLSearchParams(location.search).get("cell") || "").toLowerCase();
-  const validCell = /^8a[0-9a-f]{13}$/.test(cellId);
+  // The cell comes from the browser's position (press L), turned into a cell id at once; the coordinates are dropped.
+  // ?cell=<id> still works, to look at any cell without being there. The server only ever sees cell ids.
+  const fromAddress = (new URLSearchParams(location.search).get("cell") || "").toLowerCase();
 
   // The private seed (map rotation) belongs to this browser. It is kept so the map doesn't spin between visits.
   function privateSeed() {
@@ -52,9 +52,19 @@
   }
 
   let st = { tz, log: "" };
-  if (validCell) {
-    const floor = FLOOR.generate(FLOOR.seedFor(cellId, 0), privateSeed(), { days: FLOOR.DAYS });
-    st = { tz, cell: cellId, floor, ...FLOOR.arrive(floor), log: "> You arrive." };
+  function arriveAt(cell) {
+    const floor = FLOOR.generate(FLOOR.seedFor(cell, 0), privateSeed(), { days: FLOOR.DAYS });
+    st = { tz, cell, floor, ...FLOOR.arrive(floor), log: "> You arrive." };
+  }
+  if (isCell(fromAddress)) arriveAt(fromAddress);
+
+  let locating = false;
+  async function where() {
+    if (locating) return;
+    locating = true; st = { ...st, log: "> Finding you..." }; draw();
+    try { const cell = await locate(); if (cell === st.cell) st = { ...st, log: "> You are still here." }; else arriveAt(cell); }
+    catch (e) { st = { ...st, log: "> " + e.message }; }
+    locating = false; draw();
   }
 
   // Colors: only the things 4Dungeon colors on this screen: your @, the locked-door #, the moon, and the buttons.
@@ -71,6 +81,7 @@
         const R = esc(r).replace("@", '<span class="you">@</span>').replace(/#/g, '<span class="door">#</span>');
         return L + R;
       }
+      if (i === 28) return boxed(esc(line)).replace("[L]OCATE", '<span class="btn" data-act="G">[L]OCATE</span>');
       return boxed(esc(line));
     }).join("\n");
   }
@@ -79,10 +90,10 @@
     if (st.floor) st.map = FLOOR.minimap(st.floor, st);
     document.getElementById("screen").innerHTML = colorize(renderScreen(st, new Date()));
   }
-  function act(a) { st = a === "W" ? step(st) : turn(st, a); draw(); }
+  function act(a) { if (a === "G") return where(); st = a === "W" ? step(st) : turn(st, a); draw(); }
   document.getElementById("screen").addEventListener("click", e => { const a = e.target.closest && e.target.closest("[data-act]"); if (a) act(a.dataset.act); });
   addEventListener("keydown", e => {
-    const k = { ArrowLeft: "L", a: "L", A: "L", ArrowRight: "R", d: "R", D: "R", ArrowUp: "W", w: "W", W: "W" }[e.key];
+    const k = { ArrowLeft: "L", a: "L", A: "L", ArrowRight: "R", d: "R", D: "R", ArrowUp: "W", w: "W", W: "W", l: "G", L: "G" }[e.key];
     if (k && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); act(k); }
   });
   draw();
