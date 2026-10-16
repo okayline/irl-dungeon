@@ -18,7 +18,8 @@
 //                                     none), or with unsign: true take your name off it again
 //   POST /api/name {action: "reroll"} a new two-word name (only once you have one)
 //   POST /api/cells {action: "save" | "forget", cell}   your saved cells (up to 20, listed in /api/account)
-//   POST /api/admin {action: "test", on}   admins only: test mode on or off (see `testing`)
+//   POST /api/admin {action: "test", on, cell?}   admins only: test mode on (remembering the cell you're in) or off
+//                                     (answers `back`: that cell, to return to)
 //   POST /api/walk {cell, visited}    the rooms you've stood in; any wing this completes is recorded, and its first finder sealed
 
 import { GENESIS, sha256, verifyChain, head, chainInserts, isUnique, chainClash } from "./ledger.js";
@@ -416,6 +417,11 @@ async function admin(ctx) {
   const me = await must(ctx);
   need(!!me.admin, "Admins only.", 403);
   need(b.action === "test" && typeof b.on === "boolean", "Unknown action.");
-  await ctx.db.prepare("UPDATE players SET test_mode = ? WHERE id = ?").bind(b.on ? 1 : 0, me.id).run();
-  return { ok: true, test: b.on };
+  if (b.on) {
+    need(b.cell == null || isCell(b.cell), "That isn't a cell.");
+    await ctx.db.prepare("UPDATE players SET test_mode = 1, test_from = ? WHERE id = ?").bind(me.test_mode ? me.test_from : (b.cell || null), me.id).run();
+    return { ok: true, test: true };
+  }
+  await ctx.db.prepare("UPDATE players SET test_mode = 0, test_from = NULL WHERE id = ?").bind(me.id).run();
+  return { ok: true, test: false, back: me.test_mode ? me.test_from || null : null };
 }

@@ -2,6 +2,8 @@
 -- admin: 1 for the owner's player (set by hand). test_mode: an admin's switch; while on, nothing they do counts.
 ALTER TABLE players ADD COLUMN admin INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE players ADD COLUMN test_mode INTEGER NOT NULL DEFAULT 0;
+-- The cell an admin was in when they switched test mode on; switching it off takes them back there.
+ALTER TABLE players ADD COLUMN test_from TEXT;
 -- Doors an admin opened in test mode, kept apart from real unlocks: no key, no day, never on the ledger, and only that
 -- admin's test floors use them.
 CREATE TABLE IF NOT EXISTS test_unlocks (

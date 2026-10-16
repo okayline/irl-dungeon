@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS players (
   name_a      TEXT,
   name_b      TEXT,
   admin       INTEGER NOT NULL DEFAULT 0,      -- set by hand for the owner
-  test_mode   INTEGER NOT NULL DEFAULT 0       -- an admin's switch: while on, nothing they do counts (see test_unlocks)
+  test_mode   INTEGER NOT NULL DEFAULT 0,      -- an admin's switch: while on, nothing they do counts (see test_unlocks)
+  test_from   TEXT                             -- the cell they switched test mode on in; switching off goes back there
 );
 CREATE UNIQUE INDEX IF NOT EXISTS players_name ON players (name_a, name_b) WHERE name_a IS NOT NULL;
 

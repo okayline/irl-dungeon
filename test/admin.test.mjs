@@ -120,3 +120,16 @@ test("a real find can't be signed while test mode is on, and a short hop in test
   await load(arrive(neighbour(CELL, "N")), api, -600);
   assert.deepEqual(sql(env, "SELECT cell FROM places").map((r) => r.cell), [CELL]);
 });
+
+test("switching test mode off answers the cell it was switched on in; switching on twice keeps the first", async () => {
+  const env = world(), { me } = await adminClient(env);
+  assert.equal((await me("/api/admin", { action: "test", on: true, cell: CELL })).status, 200);
+  await me("/api/admin", { action: "test", on: true, cell: FAR });                     // already on: the start stays
+  const off = await me("/api/admin", { action: "test", on: false });
+  assert.equal(off.data.back, CELL);
+  assert.deepEqual({ ...sql(env, "SELECT test_mode, test_from FROM players WHERE id = 1")[0] }, { test_mode: 0, test_from: null });
+  assert.equal((await me("/api/admin", { action: "test", on: false })).data.back, null, "off when already off: nowhere to go back to");
+  assert.equal((await me("/api/admin", { action: "test", on: true, cell: "NOPE" })).status, 400);
+  await me("/api/admin", { action: "test", on: true });                                // no cell yet is fine
+  assert.equal((await me("/api/admin", { action: "test", on: false })).data.back, null);
+});

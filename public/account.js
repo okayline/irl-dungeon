@@ -108,7 +108,7 @@ export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchA
     rerollArmed = false;
     const r = await fetchApi("name", { action: "reroll" }); if (r.error) return say(r.error); msg = "Your name is now " + r.name + "."; draw();
   }
-  async function setTest(on) { const r = await fetchApi("admin", { action: "test", on }); if (r.error) return say(r.error); msg = on ? "Test mode is on." : "Test mode is off. Back to your real game."; draw(); onTest(on); }
+  async function setTest(on) { const r = await fetchApi("admin", { action: "test", on, cell: cell() }); if (r.error) return say(r.error); msg = on ? "Test mode is on." : "Test mode is off. Back where you started."; draw(); onTest(on, r.back || null); }
   async function saveCell(c) { const r = await fetchApi("cells", { action: "save", cell: c }); if (r.error) return say(r.error); msg = "Saved."; draw(); }
   async function forgetCell(c) { const r = await fetchApi("cells", { action: "forget", cell: c }); if (r.error) return say(r.error); msg = "Forgotten."; draw(); }
   async function makeCode() { const r = await fetchApi("codes", { action: "new" }); if (r.error) return say(r.error); newCode = r.code; msg = ""; draw(); onChange(); }
