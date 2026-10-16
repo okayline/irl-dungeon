@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.07 - Sandbox - Oct 15 2026, 08:00 PM HST
+
+- **Test mode for the admin.** A switch in [S]AVE opens a sandbox: no key limit, no travel limit, and nothing you do there counts or shows up for anyone. Switching it off takes you back to where you turned it on, with your real game exactly as you left it.
+
 ## v0.06 - Second Thoughts - Oct 15 2026, 07:47 PM HST
 
 - **Rerolling your name asks first.** Tap REROLL, then YES, REROLL to change it, or KEEP IT to keep it. A name you roll past can't come back.
