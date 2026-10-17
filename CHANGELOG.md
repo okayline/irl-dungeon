@@ -2,6 +2,11 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.20 - One Key - Oct 17 2026, 2:30 AM HST
+
+- **Save codes and passkeys now come from one shared accounts system** with the other 88x31 games, so a passkey made on any `88x31.app` address will work on all of them. Your existing save code keeps working: it moves to your account the first time you're seen.
+- **Passkeys you made here before can't carry over** (a passkey belongs to the exact address it was made on), so make a new one under Account. Your save code covers you until then.
+
 ## v0.19 - Quick Feet - Oct 15 2026, 11:30 PM HST
 
 - **Walking is quick again.** Since v0.14 every step into a room waited for the server to save it before the step finished, which made each click take seconds. The rooms you walk are now saved in batches (when you change wings, before you leave a cell, and when you close or hide the page; no timer), never one per click, so a half-walked wing survives a reload.

@@ -2,7 +2,7 @@
 
 4Dungeon in the real world. Every place on Earth is a cell; every cell is a dungeon that grows over time. 4Dungeon is the core game and the model: when this document is silent, do what 4Dungeon does.
 
-Status: **v0.19** (players, save codes, passkeys, the chained ledger, `public/floor.js`, and the page: 4Dungeon's screen and minimap, named rooms, hallways into the next cell, the day's key, unlocking a door and first finders of a wing, played from the page through `public/play.js`; since v0.08, hidden things behind walls, found as numbered copies of items from the shared table and registry; the AREA map). Where a section below says rooms are "empty", it was written before v0.08; `CHANGELOG.md` has what has shipped.
+Status: **v0.20** (players, save codes, passkeys, the chained ledger, `public/floor.js`, and the page: 4Dungeon's screen and minimap, named rooms, hallways into the next cell, the day's key, unlocking a door and first finders of a wing, played from the page through `public/play.js`; since v0.08, hidden things behind walls, found as numbered copies of items from the shared table and registry; the AREA map). Where a section below says rooms are "empty", it was written before v0.08; `CHANGELOG.md` has what has shipped.
 
 ## Settled
 
