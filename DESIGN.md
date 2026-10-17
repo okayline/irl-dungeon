@@ -2,7 +2,7 @@
 
 4Dungeon in the real world. Every place on Earth is a cell; every cell is a dungeon that grows over time. 4Dungeon is the core game and the model: when this document is silent, do what 4Dungeon does.
 
-Status: **v0.03** (players, save codes, passkeys, the chained ledger, `public/floor.js`, and the page: 4Dungeon's screen and minimap on an empty-rooms floor, turn and walk only; the day's key, unlocking a door and first finders of a wing, played from the page through `public/play.js`).
+Status: **v0.19** (players, save codes, passkeys, the chained ledger, `public/floor.js`, and the page: 4Dungeon's screen and minimap, named rooms, hallways into the next cell, the day's key, unlocking a door and first finders of a wing, played from the page through `public/play.js`; since v0.08, hidden things behind walls, found as numbered copies of items from the shared table and registry; the AREA map). Where a section below says rooms are "empty", it was written before v0.08; `CHANGELOG.md` has what has shipped.
 
 ## Settled
 
@@ -64,9 +64,9 @@ Status: **v0.03** (players, save codes, passkeys, the chained ledger, `public/fl
 12. **Putting a found button into the 88x31 collection.** Needs accounts linked across the games (passkeys are per address and each game has its own players) and 88x31 granting the copy. Not planned yet.
 13. **Keeping, using and trading.** Whether finds are a collection you keep, and how trading would work. Stand-ins for 4Dungeon's bay, forge, vault and altar.
 
-## Rooms and items (a plan: nothing here is built yet)
+## Rooms and items (written as a plan on Oct 15; walls, finds and numbered copies are built, the rest is still a plan)
 
-Written Oct 15 2026 (HST) from a design conversation with the owner. Rooms are empty today. This is what they will hold. Anything marked *open* is not decided.
+Written Oct 15 2026 (HST) from a design conversation with the owner, when rooms were still empty. Since v0.08 walls hide things (v0.10: 0 to 3 per wall), each find is a numbered copy (v0.09), and the shared item table and registry are live. Not built or not decided: MOON and SUN rooms, the real-world signals (moon, sun, time of day) deciding what drops, trading, and anything marked *open*.
 
 ### Wings and room kinds
 - A wing is 3 spaces: one **room**, one **passage**, one **dead end** (4Dungeon's own wing code; checked on 300 cells). Only the room has a kind. The passage is quiet; the dead end hides a clue about the day's two locked doors (as in 4Dungeon).
