@@ -390,7 +390,7 @@ async function search(ctx) {
   const things = hides(room, `${b.cell}|${spot}|${day}`)[b.dir] || [];
   if (!things.length) return { result: "miss" };                                      // a bare wall never answers
   const showItem = (it, copy) => ({ id: it.id, name: it.name, rarity: it.rarity, note: it.note, type: it.type, image: it.image, copy });
-  const poolFor = async (rarity) => listItems(env, { rarity });
+  const poolFor = async (rarity) => listItems(env, { rarity, source: "4dungeon" });   // dungeon items only for now (v0.21)
   if (r.test) {                                                                       // the sandbox: the first thing on the wall, nothing saved
     const pool = await poolFor(things[0].rarity);
     return pool.length ? { result: "found", item: showItem(pool.find((i) => i.id === dealt(pool, deckKey(b.cell, spot, day, things[0].rarity), 0)), null), test: true } : { result: "miss" };

@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.21 - Dungeon Finds - Oct 17 2026, 4:30 AM HST
+
+- **Walls now only hide dungeon items.** Buttons from the 88x31 cLuB no longer turn up here, for now.
+
 ## v0.20 - One Key - Oct 17 2026, 2:30 AM HST
 
 - **Save codes and passkeys now come from one shared accounts system** with the other 88x31 games, so a passkey made on any `88x31.app` address will work on all of them. Your existing save code keeps working: it moves to your account the first time you're seen.

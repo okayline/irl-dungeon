@@ -40,7 +40,7 @@ async function untilFound(p, wall, room) {
   for (let calls = 1; calls <= 40; calls++) { const r = await p.search(wall, room); if (r.data.result === "found" || r.data.result === "done") return { calls, last: r.data }; }
   assert.fail("nothing turned up in 40 searches");
 }
-const sizeOf = (env, rarity) => env.ITEMS.raw.prepare("SELECT COUNT(*) AS n FROM items WHERE rarity = ? AND retired = 0").get(rarity).n;     // 13 commons (12 + a button), 12 of the others
+const sizeOf = (env, rarity) => env.ITEMS.raw.prepare("SELECT COUNT(*) AS n FROM items WHERE rarity = ? AND retired = 0 AND source = '4dungeon'").get(rarity).n;     // 12 of each: dungeon items only (v0.21), the button (37) is never dealt
 
 test("the fixture has walls to search: some with one thing, some with several, some bare", () => {
   const s1 = spot(NOON, 1), s2 = spot(NOON, 2), b = spot(NOON, 1, { bare: true });
@@ -71,7 +71,7 @@ test("a bare wall never answers; a wall with things gives nothing on the first l
   assert.deepEqual([row.rarity, row.spot, row.day, row.wall, row.slot, row.deck_pos, row.copy], [t.rarity, "0:" + s.room, dayOf(NOON), s.wall, 0, 0, 1]);
   assert.equal(r.item.id, row.item_id); assert.equal(r.item.rarity, t.rarity); assert.equal(r.item.copy, 1);
   const lo = { common: 1, uncommon: 13, rare: 25 }[t.rarity];
-  assert.ok(row.item_id >= lo && row.item_id < lo + 12 || (t.rarity === "common" && row.item_id === 37), "an item of the thing's rarity");
+  assert.ok(row.item_id >= lo && row.item_id < lo + 12, "a dungeon item of the thing's rarity");
   assert.notEqual(row.item_id, 38, "a retired item is never dealt");
 });
 
@@ -152,7 +152,7 @@ test("as many players as there are kinds, taking from one wall on one day, each 
   for (let k = 0; k < size; k++) { const p = await player(env, "198.51.100." + (20 + k)); got.push((await untilFound(p, s.wall, s.room)).last.item.id); }
   assert.equal(new Set(got).size, size, size + " different kinds: " + got);
   assert.deepEqual(sql(env, "SELECT deck_pos FROM finds ORDER BY id").map((r) => r.deck_pos), Array.from({ length: size }, (_, i) => i));
-  assert.equal(sql(env, "SELECT COUNT(*) AS n FROM finds WHERE item_id = 38")[0].n, 0);
+  assert.equal(sql(env, "SELECT COUNT(*) AS n FROM finds WHERE item_id IN (37, 38)")[0].n, 0);   // no retired item, no 88x31 button
 });
 
 test("after every kind has been dealt, a second round starts: a kind repeats and its copy number counts up", async () => {
