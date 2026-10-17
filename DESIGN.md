@@ -45,7 +45,7 @@ Status: **v0.19** (players, save codes, passkeys, the chained ledger, `public/fl
 
 **No accounts.**
 - A player is a cookie, with save codes and passkeys to come back. Only hashes are stored.
-- The address is **`irl.88x31.app`** (a custom domain on the Worker). Passkeys belong to this address.
+- The address is **`irl.88x31.app`** (a custom domain on the Worker). Save codes and passkeys are the shared Accounts service (RP ID `88x31.app`, so a passkey works on every `*.88x31.app` game); this game only keeps its own players and cookie.
 - The page is served by the same Worker as the API (one origin, no CORS). This replaces the old arrangement (GitHub Pages plus a separate Worker with bearer tokens). Same as scoundrel.exe and dawn-baton.
 
 ## Open questions
