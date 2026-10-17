@@ -150,16 +150,54 @@ test("only five save codes per player", async () => {
 });
 
 test("you can only forget your own save codes", async () => {
-  const env = makeEnv(), a = browser(env), b = browser(env, { ip: "203.0.113.5" });
+  const env = makeEnv(), a = browser(env, { ip: "203.0.113.1" }), b = browser(env, { ip: "203.0.113.2" });
   await a("/api/codes", { action: "new" }); await b("/api/codes", { action: "new" });
-  const idA = env.DB.raw.prepare("SELECT id FROM save_codes ORDER BY id").get().id;
+  const idA = (await a("/api/account")).data.codes[0].id;
   assert.equal((await b("/api/codes", { action: "remove", id: idA })).status, 404);
-  assert.equal(count(env, "save_codes"), 2);
+  assert.equal((await a("/api/account")).data.codes.length, 1);
   assert.equal((await a("/api/codes", { action: "remove", id: idA })).status, 200);
   assert.equal((await browser(env)("/api/codes", { action: "remove", id: idA })).status, 401);
 });
 
-// ---------- logging out ----------
+test("a save code from before accounts still works once, moves to the account, and the old rows go", async () => {
+  const env = makeEnv(), a = browser(env);
+  const old = browser(env, { ip: "203.0.113.3" });
+  await old("/api/passkey", { action: "register_options" });                      // makes a player and an account
+  const pid = env.DB.raw.prepare("SELECT id FROM players").get().id;
+  const hash = "ab".repeat(32);
+  env.DB.raw.prepare("INSERT INTO save_codes (player_id, code_hash, created_at) VALUES (?, ?, 1)").run(pid, hash);
+  await old("/api/account");                                                      // seeing the player moves the old code over
+  assert.deepEqual(env.ACCOUNTS.imported, [[1, hash]]);
+  assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM save_codes").get().n, 0);
+});
+
+test("logging in links this browser's own player to the account, or reuses the account's player", async () => {
+  const env = makeEnv(), a = browser(env, { ip: "203.0.113.4" });
+  const { code } = (await a("/api/codes", { action: "new" })).data;               // player 1 has account 1
+  const fresh = browser(env, { ip: "203.0.113.5" });
+  await fresh("/api/passkey", { action: "register_options" });                    // player 2, account 2
+  await fresh("/api/load", { code });                                             // account 1 already has player 1 here
+  assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM players").get().n, 2);
+  assert.equal(env.ACCOUNTS.links.get("1|irl-dungeon"), 1);
+  const blank = browser(env, { ip: "203.0.113.6" });                              // no cookie at all: gets the account's player
+  assert.equal((await blank("/api/load", { code })).status, 200);
+  assert.equal((await blank("/api/account")).data.codes.length, 1);
+  assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM players").get().n, 2);
+});
+
+test("a passkey adds to the account and logs a new browser in; a missing service says so", async () => {
+  const env = makeEnv(), a = browser(env, { ip: "203.0.113.7" });
+  const o = await a("/api/passkey", { action: "register_options" });
+  assert.equal(o.data.origin, "https://irl.example");                             // the page's own address goes to the service
+  assert.equal((await a("/api/passkey", { action: "register", label: "k", credential: { id: "key1" } })).status, 200);
+  assert.equal((await a("/api/account")).data.passkeys.length, 1);
+  const b = browser(env, { ip: "203.0.113.8" });
+  assert.equal((await b("/api/passkey", { action: "login", credential: { id: "nope" } })).status, 400);
+  assert.equal((await b("/api/passkey", { action: "login", credential: { id: "key1" } })).status, 200);
+  assert.equal((await b("/api/account")).data.passkeys.length, 1);
+  const none = browser({ ...env, ACCOUNTS: undefined });
+  assert.equal((await none("/api/codes", { action: "new" })).status, 503);
+});
 
 test("you can't log out with no way back in; once you have one you can, and the code brings you back", async () => {
   const env = makeEnv(), me = browser(env);

@@ -60,7 +60,45 @@ export function fakeRegistry() {
   };
   return reg;
 }
-export const makeEnv = (extra = {}) => ({ DB: fakeD1(), ITEMS: fakeItems(), REGISTRY: fakeRegistry(), ...extra });
+// A stand-in for the shared accounts (the Accounts entrypoint of dungeon-items, tested there): same answers, kept in maps.
+// Codes are random; a "passkey" is any credential { id, account } that was registered. 10 wrong codes per address, then 429.
+export function fakeAccounts() {
+  let n = 0; const codes = new Map(), keys = new Map(), links = new Map(), tries = new Map(), imported = [];
+  const acct = new Set(), err = (error, status = 400) => ({ error, status });
+  const own = (id) => [...codes].filter(([, v]) => v.acct === id);
+  return {
+    imported, codes, links,
+    async createAccount() { acct.add(++n); return { accountId: n }; },
+    async addCode(id) {
+      if (own(id).length >= 5) return err("You have 5 save codes already. Forget one first.");
+      const code = Array.from({ length: 5 }, () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X")).join("-");
+      codes.set(code.replace(/-/g, ""), { acct: id, id: codes.size + 1 }); return { code };
+    },
+    async importCode(id, h) { imported.push([id, h]); return { ok: true }; },
+    async removeCode(id, cid) { const e = [...codes].find(([, v]) => v.acct === id && v.id === cid); if (!e) return err("No such save code.", 404); codes.delete(e[0]); return { ok: true }; },
+    async loginCode({ code, ip }) {
+      const c = (tries.get(ip) || 0) + 1; tries.set(ip, c);
+      if (c > 10) return err("Too many tries. Wait 15 minutes and try again.", 429);
+      const v = codes.get(String(code).toUpperCase().replace(/[^A-Z0-9]/g, "")); return v ? { accountId: v.acct } : err("That save code didn't work. Check it and try again.", 404);
+    },
+    async info(id) { return { codes: own(id).map(([, v]) => ({ id: v.id, created_at: 1, last_used_at: null })), passkeys: [...keys].filter(([, v]) => v.acct === id).map(([k, v]) => ({ id: v.id, label: v.label })), games: [] }; },
+    async waysIn(id) { return own(id).length + [...keys].filter(([, v]) => v.acct === id).length; },
+    async playerFor(id, g) { return { playerId: links.get(id + "|" + g) ?? null }; },
+    async link(id, g, p) {
+      const taken = [...links].find(([k, v]) => k.endsWith("|" + g) && v === p);
+      if (links.has(id + "|" + g)) return { playerId: links.get(id + "|" + g), linked: links.get(id + "|" + g) === p };
+      if (taken) return { playerId: null, linked: false, taken: true };
+      links.set(id + "|" + g, p); return { playerId: p, linked: true };
+    },
+    async accountOf(g, p) { const e = [...links].find(([k, v]) => k.endsWith("|" + g) && v === p); return { accountId: e ? Number(e[0].split("|")[0]) : null }; },
+    async passkeyRegisterOptions({ accountId, origin }) { return { challenge: "c-" + accountId, origin }; },
+    async passkeyRegister({ accountId, credential, label }) { keys.set(credential.id, { acct: accountId, id: keys.size + 1, label }); return { ok: true }; },
+    async passkeyLoginOptions({ origin }) { return { challenge: "login", origin }; },
+    async passkeyLogin({ credential }) { const k = keys.get(credential?.id); return k ? { accountId: k.acct } : err("That passkey isn't saved here.", 400); },
+    async passkeyRemove(id, kid) { const e = [...keys].find(([, v]) => v.acct === id && v.id === kid); if (!e) return err("No such passkey.", 404); keys.delete(e[0]); return { ok: true }; },
+  };
+}
+export const makeEnv = (extra = {}) => ({ DB: fakeD1(), ITEMS: fakeItems(), REGISTRY: fakeRegistry(), ACCOUNTS: fakeAccounts(), ...extra });
 
 // A browser: remembers the cookie the Worker sets, and sends a (fixed) client address so rate limits can be tested.
 // Each call returns { status, data, headers }.

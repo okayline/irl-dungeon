@@ -12,6 +12,7 @@
     { "binding": "ITEMS", "database_name": "items-db", "database_id": "b39d9b77-fb44-4474-82b2-60252578f38a" }
   ],
   "services": [
+    { "binding": "ACCOUNTS", "service": "dungeon-items", "entrypoint": "Accounts" },
     // the copy registry: the Registry entrypoint of the dungeon-items Worker numbers every find (src/copies.js). The
     // dungeon-items Worker must be deployed, with that entrypoint, before this one.
     { "binding": "REGISTRY", "service": "dungeon-items", "entrypoint": "Registry" }
