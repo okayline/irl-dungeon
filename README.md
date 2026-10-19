@@ -2,14 +2,14 @@
 
 4Dungeon in the real world: every ~100 m cell is a dungeon that grows over time. One key a day opens one locked door; everything else is free to explore.
 
-**Status: v0.20.** The page shows a cell's floor on 4Dungeon's screen with its minimap, and you can turn and walk through open doors, and out through a hallway into the next cell. Everyone sees the same floor in a cell, with named rooms. Step into a locked door twice (it asks first) to spend the day's key on it; walk every room of a wing and the first to do so is sealed on the ledger. Walls hide things (0 to 3 each): every find is a numbered copy of an item from the shared table, numbered by the shared registry, and [I]NVOKE lists what you hold. Your doors are kept on the server, so they come back on reload and on your other devices; the rooms you walk are outlined on the map, and the AREA map (`+` / `-`) shows the cells around you. A first find can be signed with a two-word name (rerollable), and cells can be saved in [S]AVE. Underneath is cookie players, shared accounts (save codes and passkeys, one per person across the 88x31 games), and a chained, tamper-evident ledger. See `DESIGN.md` for what is settled and what is open.
+**Status: v0.21.** The page shows a cell's floor on 4Dungeon's screen with its minimap, and you can turn and walk through open doors, and out through a hallway into the next cell. Everyone sees the same floor in a cell, with named rooms. Step into a locked door twice (it asks first) to spend the day's key on it; walk every room of a wing and the first to do so is sealed on the ledger. Walls hide things (0 to 3 each): every find is a numbered copy of a 4Dungeon item from the shared table (88x31 buttons are not dealt for now), numbered by the shared registry, and [I]NVOKE lists what you hold. Your doors are kept on the server, so they come back on reload and on your other devices; the rooms you walk are outlined on the map, and the AREA map (`+` / `-`) shows the cells around you. A first find can be signed with a two-word name (rerollable), and cells can be saved in [S]AVE. Underneath is cookie players, shared accounts (save codes and passkeys, one per person across the 88x31 games), and a chained, tamper-evident ledger. See `DESIGN.md` for what is settled and what is open.
 
 Live at **https://irl.88x31.app** (a custom domain on the `irl-dungeon` Worker).
 
 ## Run it
 
 ```
-npm test                  # 161 tests (Node 22+, built-in SQLite standing in for D1)
+npm test                  # 216 tests (Node 22+, built-in SQLite standing in for D1)
 npx wrangler d1 create irl-dungeon-db     # paste the id into wrangler.jsonc
 npx wrangler d1 execute irl-dungeon-db --local --file=schema.sql
 npx wrangler dev
@@ -26,7 +26,7 @@ npx wrangler dev
 - `public/place.js`, `public/vendor/`: position to cell id (the coordinates are dropped at once), the server's rough guess, the next cell over, and Uber's h3-js (Apache-2.0).
 - `src/names.js`: the two-word names (dawn-baton's lists).
 - `src/travel.js`: the travel check (claims that would need impossible travel earn nothing for a while).
-- `src/saves.js`, `src/passkeys.js`: save codes and passkeys, copied from dawn-baton.
+- `src/saves.js`: cookie tokens, sessions and rate limits (copied from dawn-baton). Save codes and passkeys come from the shared Accounts service (dungeon-items, bound as `ACCOUNTS`).
 - `src/items.js`: reads the shared item table (D1 `items-db`, bound as `ITEMS`; repo okayline/dungeon-items), read only.
 - `src/worker.js` also keeps `walked_rooms` (private: the rooms a player has stood in, sent in batches by the page; POST /api/rooms) and answers POST /api/area (new / entered / cleared for a cell and the six around it). `public/area.js` draws the zoomed-out AREA map from that.
 - `src/copies.js`: numbers each find through the copy registry (the `Registry` entrypoint of the dungeon-items Worker, bound as `REGISTRY`). A find is saved first and numbered a moment later; one the registry couldn't number waits (`copy` empty) and is numbered on the next `/api/finds` or repeat search. Locally, `wrangler dev` needs the dungeon-items Worker running too; without it finds stay unnumbered.
