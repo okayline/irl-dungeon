@@ -429,7 +429,7 @@ async function finds(ctx) {
   await numberPending(ctx.env, ctx.db, me.id);                                      // finds the registry couldn't number yet
   const rows = (await ctx.db.prepare("SELECT id, day, copy, item_id FROM finds WHERE player_id = ? ORDER BY id DESC LIMIT 200").bind(me.id).all()).results;
   const items = rows.length ? await getItems(ctx.env, rows.map((r) => r.item_id)) : {};
-  return { finds: rows.map((r) => ({ id: r.id, day: dayText(r.day), copy: r.copy, item: items[r.item_id] ? { name: items[r.item_id].name, rarity: items[r.item_id].rarity, type: items[r.item_id].type, note: items[r.item_id].note, image: items[r.item_id].image } : { name: "an item that has gone missing", rarity: "common", type: null, note: null, image: null } })) };
+  return { finds: rows.map((r) => ({ id: r.id, day: dayText(r.day), copy: r.copy, item_id: r.item_id, item: items[r.item_id] ? { name: items[r.item_id].name, rarity: items[r.item_id].rarity, type: items[r.item_id].type, note: items[r.item_id].note, image: items[r.item_id].image } : { name: "an item that has gone missing", rarity: "common", type: null, note: null, image: null } })) };
 }
 
 // The rooms the player has stood in. Any wing this completes is recorded for them; if nobody had finished that wing

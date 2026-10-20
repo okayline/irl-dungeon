@@ -9,20 +9,29 @@
 //
 // Each find also gets two marks in the registry, the start of its history (see dungeon-items' Marks): a 'night' mark,
 // the moon's phase when it was found (the header's moonIndex, so the same moon 4Dungeon stamps), and a 'deed' mark,
-// 'found_outside'. A find counts as numbered only once its copy and both marks are in, so a find whose marks didn't
+// 'found_outside'. A day the real sky makes special adds its occasions as 'night' marks (4Dungeon's occasions(): blue
+// moon, supermoon, eclipses, equinox, solstice, mirror day...), and copy #1 or #100 adds 'first_copy' or 'hundredth_copy'
+// (as 4Dungeon does). A find counts as numbered only once its copy and both marks are in, so a find whose marks didn't
 // land is retried like an unnumbered one; the keys ("irl-find:<id>:night") make a retry give back the same mark.
 //
 // Nothing here throws on a registry failure. A number the database refuses (it is already on another find of that item)
 // also leaves the find unnumbered rather than failing the player's request: that would be a bug worth seeing, and an
 // unnumbered find shows.
 import { isUnique } from "./ledger.js";
-import { moonIndex } from "../public/screen.js";
+import { moonIndex, occasions } from "../public/screen.js";
 
 export const GAME = "irl-dungeon";
 export const findKey = (id) => `irl-find:${id}`;
 export const DEED = "found_outside";
 const PHASE = ["new", "wax_cres", "first_q", "wax_gib", "full", "wan_gib", "last_q", "wan_cres"];   // 4Dungeon's (rules.js PHASE_MARK)
 export const nightOf = (sec) => PHASE[moonIndex(new Date(sec * 1000))];
+// Every mark a find is born with: [kind, value, key suffix], in the order they are stamped.
+export function findMarks(createdAt, copy) {
+  const out = [["night", nightOf(createdAt), "night"], ["deed", DEED, "deed"]];
+  for (const o of occasions(new Date(createdAt * 1000))) out.push(["night", o, o]);
+  if (copy === 1 || copy === 100) out.push(["deed", copy === 1 ? "first_copy" : "hundredth_copy", "copy"]);
+  return out;
+}
 
 // Number one find ({ id, player_id, item_id, created_at }). Returns its copy number, or null if it has none yet.
 export async function numberFind(env, db, find) {
@@ -32,9 +41,9 @@ export async function numberFind(env, db, find) {
   catch { return null; }
   if (!r || r.error || !Number.isInteger(r.copy)) return null;
   const holder = { game: GAME, playerId: find.player_id };
-  for (const [kind, value] of [["night", nightOf(find.created_at)], ["deed", DEED]]) {
+  for (const [kind, value, k] of findMarks(find.created_at, r.copy)) {
     let m;
-    try { m = await env.REGISTRY.addMark({ itemId: find.item_id, copy: r.copy, holder, kind, value, key: `${findKey(find.id)}:${kind}` }); }
+    try { m = await env.REGISTRY.addMark({ itemId: find.item_id, copy: r.copy, holder, kind, value, key: `${findKey(find.id)}:${k}` }); }
     catch { return null; }
     if (!m || !m.ok) return null;
   }

@@ -4,7 +4,8 @@ Times are Hawaii time (HST). Newest first.
 
 ## v0.22 - First Marks - Oct 20 2026, 12:20 AM HST
 
-- **Every find now starts a history.** When a find gets its number, it also gets two marks in the shared item registry: the moon it was found under, and that it was found outside, here. The marks go with the copy into any game. Nothing was removed; finds from before today keep their number and have no marks.
+- **Every find now starts a history.** When a find gets its number, it also gets marks in the shared item registry: the moon it was found under, that it was found outside, here, any special day it was found on (an eclipse, a blue moon, a solstice, a mirror day like 12/12, and the rest of 4Dungeon's list), and whether it is copy #1 or #100. The marks go with the copy into any game. Nothing was removed; finds from before today keep their number and have no marks.
+- **Each find's number in INVOKE is a link** to that copy's page on the shared ledger, with everything that has happened to it.
 
 ## v0.21 - Dungeon Finds - Oct 17 2026, 4:30 AM HST
 

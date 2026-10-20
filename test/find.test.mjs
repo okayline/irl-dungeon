@@ -6,7 +6,7 @@ import FLOOR from "../public/floor.js";
 import { arrive, load, forward, MISSES, NOISES } from "../public/play.js";
 import { hides, WALLS, NEAR_AFTER } from "../src/search.js";
 import { makeEnv, browser } from "./helpers.mjs";
-import { nightOf } from "../src/copies.js";
+import { nightOf, findMarks } from "../src/copies.js";
 
 const CELL = "8a464b96ab2ffff", FAR = "8a29a1d7575ffff";
 const NOON = Date.UTC(2026, 9, 16, 22, 0), DAY = 86400000;
@@ -268,7 +268,7 @@ test("a find is numbered by the registry, keyed by the find's own row id, with n
   assert.equal(row.copy, 1); assert.equal(r.last.item.copy, 1);
 });
 
-test("a numbered find gets a night mark (the moon when found) and a found_outside deed mark, once", async () => {
+test("a numbered find gets a night mark (the moon when found), a found_outside deed mark and, as copy #1, first_copy, once", async () => {
   const env = world(), { p } = await oneFind(env);
   const row = sql(env, "SELECT * FROM finds")[0], key = "irl-find:" + row.id;
   const holder = { game: "irl-dungeon", playerId: row.player_id };
@@ -276,16 +276,24 @@ test("a numbered find gets a night mark (the moon when found) and a found_outsid
   assert.deepEqual(env.REGISTRY.marks, [
     { itemId: row.item_id, copy: 1, holder, kind: "night", value: nightOf(row.created_at), key: key + ":night" },
     { itemId: row.item_id, copy: 1, holder, kind: "deed", value: "found_outside", key: key + ":deed" },
+    { itemId: row.item_id, copy: 1, holder, kind: "deed", value: "first_copy", key: key + ":copy" },
   ]);
   env.DB.raw.exec("UPDATE finds SET copy = NULL");                                   // a retry asks again and makes no new marks
   await p.me("/api/finds");
-  assert.equal(env.REGISTRY.marks.length, 2); assert.equal(sql(env, "SELECT copy FROM finds")[0].copy, 1);
+  assert.equal(env.REGISTRY.marks.length, 3); assert.equal(sql(env, "SELECT copy FROM finds")[0].copy, 1);
 });
 
 test("the night mark is the phase from the calendar: first quarter Oct 18 2026, full moon Oct 26, new moon Nov 9", () => {
   assert.equal(nightOf(Date.UTC(2026, 9, 18, 12) / 1000), "first_q");
   assert.equal(nightOf(Date.UTC(2026, 9, 26, 12) / 1000), "full");
   assert.equal(nightOf(Date.UTC(2026, 10, 9, 12) / 1000), "new");
+});
+
+test("occasions and round copy numbers add marks: the Aug 12 2026 solar eclipse, 12/12, copy #100; an ordinary day adds none", () => {
+  const values = (t, copy) => findMarks(Date.UTC(...t) / 1000, copy).map((m) => m[1]).slice(2);
+  assert.deepEqual(values([2026, 7, 12, 12], 100), ["eclipse_solar", "hundredth_copy"]);
+  assert.deepEqual(values([2026, 11, 12, 12], 7), ["mirror_day"]);
+  assert.deepEqual(values([2026, 9, 16, 12], 2), []);
 });
 
 test("numbers are shared with other games: copies already born elsewhere come first", async () => {

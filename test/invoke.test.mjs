@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { invokeLines } from "../public/invoke.js";
+import { invokeLines, copyUrl } from "../public/invoke.js";
 import { foundLines } from "../public/found.js";
 import { renderScreen } from "../public/screen.js";
 import { arrive } from "../public/play.js";
@@ -21,6 +21,10 @@ test("INVOKE lists finds with rarity, type and copy number; with none it says ho
   assert.deepEqual(invokeLines([]), ["Nothing yet.", "Press into a wall to search it."]);
   assert.deepEqual(invokeLines([{ copy: 3, item: { name: "a spent battery", rarity: "common", type: null } }, { copy: 1, item: { name: "Bodacious", rarity: "common", type: "neon" } }]),
     ["a spent battery   COMMON  #3", "Bodacious   COMMON NEON  #1"]);
+});
+test("a numbered find links to its copy's page on the shared ledger; one still waiting has no link", () => {
+  assert.equal(copyUrl({ copy: 4, item_id: 7 }), "https://88x31.app/registry?item=7&copy=4");
+  assert.equal(copyUrl({ copy: null, item_id: 7 }), null);
 });
 test("a find still waiting for its number lists without one (never '#null')", () => {
   assert.deepEqual(invokeLines([{ copy: null, item: { name: "a spent battery", rarity: "common", type: null } }]), ["a spent battery   COMMON"]);
