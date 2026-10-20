@@ -41,11 +41,12 @@ export function fakeItems() {
   return { prepare: (sql) => prep(sql), raw: db };
 }
 // A stand-in for the copy registry (the Registry entrypoint of dungeon-items): one counter per item shared by every game,
-// births idempotent by game + key. `down` makes calls throw, `refuse` makes it answer { error }. `calls` counts birth calls.
+// births and marks idempotent by game + key. `down` makes calls throw, `refuse` makes it answer { error }. `calls` counts
+// birth calls; `marks` lists every mark made.
 export function fakeRegistry() {
-  const born = new Map(), counts = new Map();
+  const born = new Map(), counts = new Map(), marked = new Map();
   const reg = {
-    calls: 0, down: false, refuse: false, log: [],
+    calls: 0, down: false, refuse: false, log: [], marks: [],
     async birth(a) {
       reg.calls++; reg.log.push(a);
       if (reg.down) throw new Error("registry unreachable");
@@ -55,6 +56,15 @@ export function fakeRegistry() {
       const copy = (counts.get(a.itemId) || 0) + 1; counts.set(a.itemId, copy);
       const r = { itemId: a.itemId, copy }; born.set(k, r);
       return { ...r, created: true };
+    },
+    async addMark(a) {
+      if (reg.down) throw new Error("registry unreachable");
+      if (reg.refuse) return { error: "refused" };
+      const k = `${a.holder.game}|${a.key}`;
+      if (marked.has(k)) return { ok: true, n: marked.get(k), created: false };
+      const n = reg.marks.filter((m) => m.itemId === a.itemId && m.copy === a.copy).length + 1;
+      marked.set(k, n); reg.marks.push(a);
+      return { ok: true, n, created: true };
     },
     total: () => born.size,                                     // copies ever made
   };

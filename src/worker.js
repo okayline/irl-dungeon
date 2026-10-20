@@ -412,7 +412,7 @@ async function search(ctx) {
     try {                                                                            // saved first, numbered by the registry a moment later (src/copies.js)
       const row = await db.prepare("INSERT INTO finds (player_id, cell, layer, spot, day, wall, slot, rarity, deck_pos, item_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id")
         .bind(r.me.id, b.cell, LAYER, spot, day, b.dir, slot, rarity, pos, item.id, sec(ctx.t)).first();
-      const copy = await numberFind(env, db, { id: row.id, player_id: r.me.id, item_id: item.id });
+      const copy = await numberFind(env, db, { id: row.id, player_id: r.me.id, item_id: item.id, created_at: sec(ctx.t) });
       return { result: "found", item: showItem(item, copy) };
     } catch (e) {
       if (!isUnique(e)) throw e;

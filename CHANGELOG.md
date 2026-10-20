@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.22 - First Marks - Oct 20 2026, 12:20 AM HST
+
+- **Every find now starts a history.** When a find gets its number, it also gets two marks in the shared item registry: the moon it was found under, and that it was found outside, here. The marks go with the copy into any game. Nothing was removed; finds from before today keep their number and have no marks.
+
 ## v0.21 - Dungeon Finds - Oct 17 2026, 4:30 AM HST
 
 - **Walls now only hide dungeon items.** Buttons from the 88x31 cLuB no longer turn up here, for now.
