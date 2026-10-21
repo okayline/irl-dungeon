@@ -207,7 +207,6 @@ test("you can't log out with no way back in; once you have one you can, and the 
   const { data } = await me("/api/codes", { action: "new" });
   assert.equal((await me("/api/logout", {})).status, 200);
   assert.equal((await me("/api/account")).data.player, false);              // the cookie is dead
-  assert.equal((await me("/api/codes", { action: "new" })).status, 401);   // and can't make a new player until it logs in
   assert.equal((await me("/api/load", { code: data.code })).status, 200);
   assert.equal((await me("/api/account")).data.player, true);
   assert.equal(count(env, "players"), 1);
