@@ -113,8 +113,9 @@ export const makeEnv = (extra = {}) => ({ DB: fakeD1(), ITEMS: fakeItems(), REGI
 // A browser: remembers the cookie the Worker sets, and sends a (fixed) client address so rate limits can be tested.
 // Each call returns { status, data, headers }.
 export function browser(env, { ip = "203.0.113.1", origin = "https://irl.example", cf = null } = {}) {
-  let cookie = "";
+  const jar = {};
   const me = async (path, body, { method, headers = {}, raw } = {}) => {
+    const cookie = Object.entries(jar).map(([k, v]) => `${k}=${v}`).join("; ");
     const req = new Request(origin + path, {
       method: method || (body !== undefined || raw !== undefined ? "POST" : "GET"),
       headers: { "cf-connecting-ip": ip, ...(body !== undefined ? { "content-type": "application/json" } : {}), ...(cookie ? { cookie } : {}), ...headers },
@@ -122,14 +123,16 @@ export function browser(env, { ip = "203.0.113.1", origin = "https://irl.example
     });
     if (cf) Object.defineProperty(req, "cf", { value: cf });         // what Cloudflare adds to a request (here, only what a test sets)
     const res = await worker.fetch(req, env);
-    const set = res.headers.get("set-cookie");
-    if (set) cookie = set.split(";")[0];
+    for (const c of res.headers.getSetCookie()) {
+      const [k, v] = c.split(";")[0].split("=");
+      if (/Max-Age=0/.test(c)) delete jar[k]; else jar[k] = v;
+    }
     let data = null;
     try { data = await res.json(); } catch { /* not JSON */ }
     return { status: res.status, data, headers: res.headers };
   };
-  me.cookie = () => cookie;
-  me.setCookie = (c) => { cookie = c; };
+  me.cookie = () => (jar.irl ? `irl=${jar.irl}` : "");                // the player cookie
+  me.setCookie = (c) => { const [k, v] = c.split("="); jar[k] = v; };
   return me;
 }
 
