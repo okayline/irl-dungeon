@@ -207,10 +207,24 @@ test("you can't log out with no way back in; once you have one you can, and the 
   const { data } = await me("/api/codes", { action: "new" });
   assert.equal((await me("/api/logout", {})).status, 200);
   assert.equal((await me("/api/account")).data.player, false);              // the cookie is dead
-  assert.equal((await me("/api/codes", { action: "new" })).status, 401);   // and can't make a new player until it logs in
   assert.equal((await me("/api/load", { code: data.code })).status, 200);
   assert.equal((await me("/api/account")).data.player, true);
   assert.equal(count(env, "players"), 1);
+});
+
+test("logging out goes back to this browser's own player, so it never makes a new one", async () => {
+  const env = makeEnv(), home = browser(env), cafe = browser(env, { ip: "203.0.113.7" });
+  const { data } = await home("/api/codes", { action: "new" });
+  await cafe("/api/cells", { action: "save", cell: "8a464b96ab2ffff" });  // the cafe browser's own player (no account)
+  const own = cafe.cookie();
+  assert.equal((await cafe("/api/load", { code: data.code })).status, 200);
+  assert.notEqual(cafe.cookie(), own);
+  assert.equal((await cafe("/api/logout", {})).status, 200);
+  assert.equal(cafe.cookie(), own);                                         // back on its own player
+  await cafe("/api/load", { code: data.code }); await cafe("/api/logout", {});
+  assert.equal(cafe.cookie(), own);                                         // and again
+  assert.equal((await cafe("/api/account")).data.player, true);
+  assert.equal(count(env, "players"), 2);
 });
 
 test("an old cookie is dead after logging out, even if someone kept a copy", async () => {
