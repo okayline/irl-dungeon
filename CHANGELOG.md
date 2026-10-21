@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.23 - Log In First - Oct 21 2026, 12:50 AM HST
+
+- **After you log out of this browser, playing asks you to log in first** with your save code or passkey, instead of making a new empty player. A browser that has never played still gets a player the first time. Removed: a new empty player every time you played after logging out.
+
 ## v0.22 - First Marks - Oct 20 2026, 12:20 AM HST
 
 - **Every find now starts a history.** When a find gets its number, it also gets marks in the shared item registry: the moon it was found under, that it was found outside, here, any special day it was found on (an eclipse, a blue moon, a solstice, a mirror day like 12/12, and the rest of 4Dungeon's list), and whether it is copy #1 or #100. The marks go with the copy into any game. Nothing was removed; finds from before today keep their number and have no marks.
