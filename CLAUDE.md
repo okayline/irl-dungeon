@@ -1,5 +1,14 @@
 # Working notes for irl-dungeon
 
+## Rules for every repo
+
+- **Push only when the user says to.** Build and commit locally as asked.
+- **Ask before adding anything that wasn't asked for** (a button, a screen, a message, a page, a feature), even a small one. The owner would rather be asked than remove it later.
+- **Keep testing quick: 2-3 mins at most. Don't test for edge cases.**
+- **No new dependencies** without asking.
+- Times in changelogs are Hawaii time (HST).
+
+
 - **Push only when the user says to.** Build and commit locally as asked. (When the Worker is connected to this repo, a push becomes a release.)
 - **Ask before adding anything that wasn't asked for** (a button, a screen, a message, a page, a feature), even a small one. The owner would rather be asked than remove it later.
 - **Stay in scope.** This is 4Dungeon in the real world (see `DESIGN.md`). No breath, no demons, no combat, and nothing else that wasn't asked for. If something is unclear, ask, or write it under "Open questions" in `DESIGN.md`. Don't invent features, and don't leave placeholder or fake data on screen.
