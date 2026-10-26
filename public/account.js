@@ -69,6 +69,15 @@ export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchA
     if (!a.cells.length) line("   None yet.", "dim");
     if (here && !a.cells.some((c) => c.cell === here)) row("   ", button("SAVE THIS CELL", () => saveCell(here)));
     line();
+    // (v0.23) CARRY: the copy you carry into every 88x31 game (gold if the Moon blessed it), and every copy your account
+    // holds, newest first, each with PIN. Being first through a wing marks the one you carry.
+    if (a.player) {
+      line(` CARRY  ${a.carry ? a.carry.name + " #" + a.carry.copy : "nothing yet"}`.slice(0, 45), a.carry && a.carry.blessed ? "gold" : "");
+      for (const x of (a.copies || []).slice(0, 12)) row(`   ${(x.name + " #" + x.copy).slice(0, 28).padEnd(29)}`, x.pinned || (a.carry && !a.copies.some((y) => y.pinned) && x === a.copies[0]) ? "" : button("PIN", () => pin(x)));
+      if (!(a.copies || []).length) line("   No copies yet. Search a wall.", "dim");
+      line("   First through a wing marks it.", "dim");
+      line();
+    }
     line(` SAVE CODES (${a.codes.length}/5)`);
     for (const c of a.codes) row(`   made ${monthDay(c.created_at)}${c.last_used_at ? ", used " + monthDay(c.last_used_at) : ""}  `, button("FORGET", () => forget("codes", c.id)));
     if (!a.codes.length) line("   None yet.", "dim");
@@ -96,6 +105,7 @@ export function openSave(root, { onChange = () => {}, onClose = () => {}, fetchA
   // Messages show under the title, at the top with it, so they never cover the list.
   const say = (t) => { msg = t; const m = pre.querySelector(".msg"); if (m) { m.textContent = t ? " " + t : ""; m.hidden = !t; } };
   const close = () => { root.hidden = true; pre.textContent = ""; onClose(); };
+  async function pin(x) { after(await fetchApi("pin", { itemId: x.itemId, copy: x.copy }), "Pinned. Every game carries it now."); }
   async function after(r, ok) { if (r.error) return say(r.error); if (ok) msg = ok; draw(); onChange(); }
 
   async function copyCode() {

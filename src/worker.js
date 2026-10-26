@@ -48,7 +48,7 @@ const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(d
 });
 
 const ROUTES = {
-  "GET /api/account": account, "POST /api/codes": codes, "POST /api/load": loadCode,
+  "GET /api/account": account, "POST /api/pin": pinCopy, "POST /api/codes": codes, "POST /api/load": loadCode,
   "POST /api/passkey": passkey, "POST /api/logout": logout,
   "GET /api/ledger": ledger, "GET /api/here": here, "GET /api/verify": verify,
   "POST /api/run": run, "POST /api/rooms": rooms, "POST /api/area": area, "POST /api/sign": sign, "POST /api/name": rename, "POST /api/cells": cells, "POST /api/admin": admin, "POST /api/unlock": unlock, "POST /api/walk": walk, "POST /api/search": search, "GET /api/finds": finds,
@@ -179,13 +179,14 @@ async function enter(ctx, accountId) {
 
 async function account(ctx) {
   const me = await player(ctx);
-  if (!me) return { player: false, codes: [], passkeys: [], devices: 0, name: null, cells: [] };
+  if (!me) return { player: false, codes: [], passkeys: [], devices: 0, name: null, cells: [], carry: null, copies: [] };
   const { db } = ctx;
   const id = await accountFor(ctx, me);
   const ways = id ? ok(await ACC(ctx.env).info(id)) : { codes: [], passkeys: [] };
   const devices = 1 + (await db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE player_id = ?").bind(me.id).first()).n;
   const saved = (await db.prepare("SELECT cell, created_at FROM saved_cells WHERE player_id = ? ORDER BY created_at, cell").bind(me.id).all()).results;
-  return { player: true, codes: ways.codes, passkeys: ways.passkeys, devices, name: nameText(me.name_a, me.name_b), cells: saved, ...(me.admin ? { admin: true, test: !!me.test_mode } : {}) };
+  const [carry, copies] = await Promise.all([carried(ctx.env, me.id), copiesOf(ctx.env, me.id)]);   // (v0.23) the copy you carry, and the picker's list
+  return { player: true, codes: ways.codes, passkeys: ways.passkeys, devices, name: nameText(me.name_a, me.name_b), cells: saved, carry: carryView(carry), copies, ...(me.admin ? { admin: true, test: !!me.test_mode } : {}) };
 }
 
 async function codes(ctx) {
@@ -467,7 +468,7 @@ async function recordWing(ctx, me, cell, w) {
     const record = JSON.stringify({ cell, layer: LAYER, wing: w.key });
     const stmts = [done, db.prepare("INSERT INTO wing_firsts (cell, layer, wing_key, player_id, created_at) VALUES (?,?,?,?,?)").bind(cell, LAYER, w.key, me.id, t),
       ...(await chainInserts(db, await head(db), [{ kind: "wing", record, playerId: me.id, t }]))];
-    try { await db.batch(stmts); return true; }
+    try { await db.batch(stmts); await markCarry(ctx.env, me.id, "first_in_wing", "wing:" + cell + ":" + LAYER + ":" + w.key); return true; }   // (v0.23) first through a wing marks the carried copy
     catch (e) {
       if (chainClash(e)) continue;
       if (isUnique(e) && /wing_firsts/.test(String(e.message))) continue;     // lost the race for "first": the next pass records just the completion
@@ -561,4 +562,41 @@ async function admin(ctx) {
   }
   await ctx.db.prepare("UPDATE players SET test_mode = 0, test_from = NULL WHERE id = ?").bind(me.id).run();
   return { ok: true, test: false, back: me.test_mode ? me.test_from || null : null };
+}
+
+// ---------- the carried copy (copied from TILT.EXE v0.19) ----------
+// Your account's pinned copy from any game (dungeon-items registry.js pinned: the pin, else your newest copy), read when
+// a run starts so the page can show it, and read again when a memorable moment marks it (markCarried: a deed mark made
+// in this game, keyed so a retry makes no second mark). A Moon-blessed copy (a 4Dungeon mark) shows in gold. A registry
+// that's away, or no copy, carries nothing and never stops a run.
+async function carried(env, playerId) {
+  try {
+    const c = env.REGISTRY && env.REGISTRY.pinned ? await env.REGISTRY.pinned(GAME, playerId) : null;
+    return c && c.itemId ? { ...c, blessed: c.marks.some((m) => m.kind === "moon" && m.value === "blessed") ? 1 : 0 } : null;
+  } catch (e) { console.error(e); return null; }
+}
+const carryView = (c) => c ? { name: c.item.name, copy: c.copy, blessed: c.blessed } : null;
+async function markCarry(env, playerId, value, key) {
+  const c = await carried(env, playerId);
+  if (!c) return;
+  try {
+    const r = await env.REGISTRY.markCarried({ itemId: c.itemId, copy: c.copy, by: { game: GAME, playerId }, kind: "deed", value, key });
+    if (r && r.error) console.error("The registry refused the mark: " + r.error);
+  } catch (e) { console.error(e); }
+}
+
+// The picker (SAVE panel): /api/account lists every copy your account holds in any game (`copies`, newest first) and the
+// one you carry (`carry`); POST /api/pin {itemId, copy} pins one, and every game carries it from then on.
+async function pinCopy(ctx) {
+  const me = await player(ctx), b = await body(ctx);
+  if (!me) throw new Oops("Make a save code or passkey first.", 401);
+  const r = await ctx.env.REGISTRY.pin({ game: GAME, playerId: me.id, itemId: Number(b.itemId), copy: Number(b.copy) });
+  if (r && r.error) throw new Oops(r.error);
+  return { ok: true };
+}
+async function copiesOf(env, playerId) {
+  try {
+    const list = env.REGISTRY && env.REGISTRY.heldAcross ? await env.REGISTRY.heldAcross(GAME, playerId, 50) : [];
+    return list.map((c) => ({ itemId: c.itemId, copy: c.copy, name: c.item.name, game: c.game, pinned: c.pinned }));
+  } catch (e) { console.error(e); return []; }
 }

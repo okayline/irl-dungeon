@@ -266,3 +266,21 @@ test("run after finishing: the page is told which wings are done, so it doesn't 
   await walk(me, wingRooms(r.floor, 0));
   assert.deepEqual((await open(me)).completed, ["0"]);
 });
+
+test("walk: being first through a wing marks the copy the player carries (once); the SAVE panel lists copies and pins one", async () => {
+  const env = world(), me = browser(env), r = await open(me), marked = [], pins = [];
+  Object.assign(env.REGISTRY, {
+    pinned: async () => ({ itemId: 4, copy: 2, item: { name: "a lamp" }, marks: [] }),
+    markCarried: async (m) => { marked.push(m); return { ok: true, n: 1, created: true }; },
+    heldAcross: async () => [{ itemId: 4, copy: 2, game: "4dungeon", pinned: false, item: { name: "a lamp" } }],
+    pin: async (p) => { pins.push(p); return { ok: true }; },
+  });
+  await walk(me, wingRooms(r.floor, 0));
+  await walk(me, wingRooms(r.floor, 0));
+  const pid = sql(env, "SELECT id FROM players")[0].id;
+  assert.deepEqual(marked, [{ itemId: 4, copy: 2, by: { game: "irl-dungeon", playerId: pid }, kind: "deed", value: "first_in_wing", key: "wing:" + CELL + ":0:0" }]);
+  const a = (await me("/api/account")).data;
+  assert.deepEqual([a.carry, a.copies], [{ name: "a lamp", copy: 2, blessed: 0 }, [{ itemId: 4, copy: 2, name: "a lamp", game: "4dungeon", pinned: false }]]);
+  assert.equal((await me("/api/pin", { itemId: 4, copy: 2 })).status, 200);
+  assert.deepEqual(pins, [{ game: "irl-dungeon", playerId: pid, itemId: 4, copy: 2 }]);
+});

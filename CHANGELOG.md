@@ -2,6 +2,11 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.23 - Carry - Oct 26 2026, 12:31 AM HST
+- **You carry a copy.** SAVE shows CARRY: your account's pinned copy from any 88x31 game, or your newest copy, in gold if the Moon blessed it. Below it is every copy your account holds, each with [PIN]. Removed: no way to see or choose the copy you carry.
+- **Being first through a wing marks the copy you carry** ("first_in_wing", once per wing), a mark only a real place can give. Removed: first finds leaving no trace on the copies players hold.
+- Needs dungeon-items with the pinned copy (its migration 007) live first.
+
 ## v0.22 - First Marks - Oct 20 2026, 12:20 AM HST
 
 - **Every find now starts a history.** When a find gets its number, it also gets marks in the shared item registry: the moon it was found under, that it was found outside, here, any special day it was found on (an eclipse, a blue moon, a solstice, a mirror day like 12/12, and the rest of 4Dungeon's list), and whether it is copy #1 or #100. The marks go with the copy into any game. Nothing was removed; finds from before today keep their number and have no marks.
