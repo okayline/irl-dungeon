@@ -22,7 +22,7 @@ npx wrangler dev
 - `public/floor.js`: 4Dungeon's floor generator and minimap, trimmed (empty rooms). In `public/` because the page and the Worker both use it.
 - `public/screen.js`, `public/walk.js`, `public/index.html`: 4Dungeon's 80-column screen, trimmed to what this game has; turning and walking; the page. The page starts at the server's rough guess from the connection (no location prompt) and you walk out of a cell's start room into the next one; L uses the browser's location where it's allowed, and `?cell=<H3 id at resolution 10>` opens any cell, e.g. `/?cell=8a2a1072b59ffff`.
 - `public/play.js`: the page's side of the game: opening a cell (your doors from the server), asking before the key is spent, unlocking, and reporting a wing walked in full.
-- `public/account.js`: the SAVE panel (save codes and passkeys), inside the 3D view; press S. `test/e2e/save.py` checks it in a real browser against the real Worker (run by hand; needs python3 playwright).
+- `public/account.js`: the SAVE panel (your name, saved cells, and test mode for the admin), inside the 3D view; press S. Save codes, passkeys and logging in are the footer's ≡ window (`GET /api/carry`).
 - `public/place.js`, `public/vendor/`: position to cell id (the coordinates are dropped at once), the server's rough guess, the next cell over, and Uber's h3-js (Apache-2.0).
 - `src/names.js`: the two-word names (dawn-baton's lists).
 - `src/travel.js`: the travel check (claims that would need impossible travel earn nothing for a while).

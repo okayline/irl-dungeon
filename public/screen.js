@@ -8,7 +8,7 @@
 import { roomName } from "./roomnames.js";
 
 // The build number: bumped with every release, so the page, CHANGELOG.md and the git history always match.
-const VERSION = "v0.24";
+const VERSION = "v0.25";
 const HOME = "Pacific/Honolulu";
   const W = 80, VW = 47, VH = 17, OFF = [0, 3, 6];
   const L_ = o => 2 + o, R_ = o => 44 - o;

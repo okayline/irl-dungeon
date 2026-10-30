@@ -2,6 +2,9 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.25 - No Login Page - Oct 29 2026, 2:40 PM HST
+- **SAVE no longer has save codes, passkeys, logging in or the CARRY list.** They are all in the footer's ≡ window. SAVE keeps your name, your saved cells and (for the admin) test mode. Removed: SAVE CODES, PASSKEYS, LOG IN ON THIS DEVICE, LOG OUT, the CARRY list with its PIN buttons, and "Saved on N devices".
+
 ## v0.24 - Footer - Oct 29 2026, 2:15 PM HST
 - **The shared footer** from dungeon-items ("© ~*~88x31~*~ cLuB, year · ≡ v0.24"), the same line every game shows. Its ≡ pops up the carry window. Removed: the page's own version line.
 - **The carry window** (`GET /api/carry`, `?embed=1` inside the footer): the registry's page of every copy your account holds, with the save codes, passkeys and logging in and out, in irl-dungeon's look. Same as scoundrel.exe's. Nothing else removed; SAVE still has everything it had.

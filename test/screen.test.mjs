@@ -122,16 +122,6 @@ test("the build number is on the page and is the newest entry in CHANGELOG.md", 
   assert.ok(page.includes("/footer.js") && page.includes(`data-version="${VERSION}"`), "the shared footer must show the build number");
 });
 
-import { b64, unb64 } from "../public/account.js";
-test("the passkey byte helpers match Node's own base64url, for every length", () => {
-  for (let n = 0; n < 70; n++) {
-    const bytes = Uint8Array.from({ length: n }, (_, i) => (i * 37 + n * 11) % 256);
-    assert.equal(b64(bytes), Buffer.from(bytes).toString("base64url"));
-    assert.deepEqual([...unb64(Buffer.from(bytes).toString("base64url"))], [...bytes]);
-  }
-  assert.deepEqual([...unb64("-_8")], [251, 255]);
-});
-
 test("a wall in a cell's start room is the way out to the next cell; a wall anywhere else is searched", () => {
   let out = 0, plain = 0;
   for (const c of cells) {
