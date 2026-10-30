@@ -2,6 +2,9 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.26 - No Scrollbar - Oct 29 2026, 10:00 PM HST
+- **The screen no longer scrolls inside itself**, so no scrollbar shows beside it. Removed: the screen box's own scrolling (`overflow-x: auto` on `.frame`).
+
 ## v0.25 - No Login Page - Oct 29 2026, 2:32 PM HST
 - **SAVE no longer has save codes, passkeys, logging in or the CARRY list.** They are all in the footer's ≡ window. SAVE keeps your name, your saved cells and (for the admin) test mode. Removed: SAVE CODES, PASSKEYS, LOG IN ON THIS DEVICE, LOG OUT, the CARRY list with its PIN buttons, and "Saved on N devices".
 
