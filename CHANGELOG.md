@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.24 - Footer - Oct 29 2026, 2:15 PM HST
+- **The shared footer** from dungeon-items ("© ~*~88x31~*~ cLuB, year · ≡ v0.24"), the same line every game shows. Its ≡ pops up the carry window. Removed: the page's own version line.
+- **The carry window** (`GET /api/carry`, `?embed=1` inside the footer): the registry's page of every copy your account holds, with the save codes, passkeys and logging in and out, in irl-dungeon's look. Same as scoundrel.exe's. Nothing else removed; SAVE still has everything it had.
+
 ## v0.23 - Carry - Oct 26 2026, 12:31 AM HST
 - **You carry a copy.** SAVE shows CARRY: your account's pinned copy from any 88x31 game, or your newest copy, in gold if the Moon blessed it. Below it is every copy your account holds, each with [PIN]. Removed: no way to see or choose the copy you carry.
 - **Being first through a wing marks the copy you carry** ("first_in_wing", once per wing), a mark only a real place can give. Removed: first finds leaving no trace on the copies players hold.

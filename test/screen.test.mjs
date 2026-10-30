@@ -119,7 +119,7 @@ test("the build number is on the page and is the newest entry in CHANGELOG.md", 
   const newest = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8").match(/^## (v\d+\.\d+)\b/m)[1];
   assert.equal(VERSION, newest);
   const page = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-  assert.ok(page.includes('id="ver"') && page.includes("VERSION"), "the page must show the build number");
+  assert.ok(page.includes("/footer.js") && page.includes(`data-version="${VERSION}"`), "the shared footer must show the build number");
 });
 
 import { b64, unb64 } from "../public/account.js";

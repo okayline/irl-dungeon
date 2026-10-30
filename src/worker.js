@@ -59,6 +59,7 @@ export default {
     const url = new URL(req.url);
     if (!url.pathname.startsWith("/api/")) return env.ASSETS ? env.ASSETS.fetch(req) : new Response("Not found", { status: 404 });
     try {
+      if (req.method === "GET" && url.pathname === "/api/carry") return await carryPage(req, env);   // a page, not JSON
       const route = ROUTES[`${req.method} ${url.pathname}`];
       if (!route) return json({ error: "No such thing." }, 404);
       // A page on another site can send a form post, but not a JSON one without our say-so: requiring JSON keeps
@@ -587,6 +588,21 @@ async function markCarry(env, playerId, value, key) {
 
 // The picker (SAVE panel): /api/account lists every copy your account holds in any game (`copies`, newest first) and the
 // one you carry (`carry`); POST /api/pin {itemId, copy} pins one, and every game carries it from then on.
+// The carry window (the footer's ≡): the registry's own page of every copy your account holds in any game, with the
+// shared save codes and passkeys and logging in and out (the routes above), in irl-dungeon's frame (dungeon-items
+// carry-window.js). Its buttons pin through POST /api/pin. Same as scoundrel.exe's.
+//   GET  /api/carry[?embed=1]     the window, as a page
+async function carryPage(req, env) {
+  const ctx = { env, req, url: new URL(req.url), db: env.DB, t: env.clock ? env.clock() : Date.now(), setCookie: null };
+  const me = await player(ctx);
+  if (!env.REGISTRY || !env.REGISTRY.carryWindow) throw new Oops("The registry is unavailable right now. Try again in a moment.", 503);
+  const id = me ? await accountFor(ctx, me) : null;
+  const ways = { player: !!me, ...(id ? ok(await ACC(env).info(id)) : { codes: [], passkeys: [] }) };
+  const html = await env.REGISTRY.carryWindow({ game: GAME, playerId: me ? me.id : 0, pinUrl: "/api/pin", back: "/", ways, embed: ctx.url.searchParams.get("embed") === "1",
+    frame: { title: "IRL-DUNGEON   CARRY", paper: "#07090a", ink: "#e4e4df", edge: "#8f8f8a", accent: "#e3b341", font: '"VT323", ui-monospace, monospace' } });
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+}
+
 async function pinCopy(ctx) {
   const me = await player(ctx), b = await body(ctx);
   if (!me) throw new Oops("Make a save code or passkey first.", 401);

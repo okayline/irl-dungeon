@@ -26,7 +26,6 @@
   .kanji .g { font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "MS Gothic", sans-serif; line-height: 0; font-size: 0.8em; }
   .cell { display: inline-block; width: 1ch; text-align: center; overflow: visible; white-space: nowrap; }
   /* The build number, small, under the screen's lower right corner (as in 4Dungeon). */
-  .ver { text-align: right; font-size: 12px; line-height: 14px; color: var(--trail); padding: 2px 1ch 0 0; letter-spacing: 0.05em; }
   .gold { color: var(--gold); }
   .dim { color: var(--trail); }
   .code { font-weight: bold; letter-spacing: .04em; word-break: break-all; }
@@ -45,9 +44,11 @@
 </head>
 <body>
   <div class="frame"><pre id="screen">LOADING...</pre>
-    <div id="save" class="viewpop" role="dialog" aria-modal="true" aria-label="Save codes and passkeys" hidden><pre></pre></div><div id="found" class="viewpop" role="dialog" aria-modal="true" aria-label="You found something" hidden><pre></pre></div><div id="invoke" class="viewpop" role="dialog" aria-modal="true" aria-label="Your finds" hidden><pre></pre></div><div id="ver" class="ver"></div></div>
+    <div id="save" class="viewpop" role="dialog" aria-modal="true" aria-label="Save codes and passkeys" hidden><pre></pre></div><div id="found" class="viewpop" role="dialog" aria-modal="true" aria-label="You found something" hidden><pre></pre></div><div id="invoke" class="viewpop" role="dialog" aria-modal="true" aria-label="Your finds" hidden><pre></pre></div></div>
+    <!-- the footer every game shows (dungeon-items src/footer.js): "© ~*~88x31~*~ cLuB, year · ≡ version"; ≡ pops up the save codes / passkeys / carry window (/api/carry) -->
+    <script src="https://dungeon-items.ddddungeon.workers.dev/footer.js" data-version="v0.24"></script>
 <script type="module">
-  import { renderScreen, VERSION, WORD } from "./screen.js";
+  import { renderScreen, WORD } from "./screen.js";
   import { turn } from "./walk.js";
   import { arrive, load, forward, turned, firstLine, signHere, unsignHere, loadArea } from "./play.js";
   import FLOOR from "./floor.js";
@@ -203,7 +204,6 @@
     const k = { ArrowLeft: "L", a: "L", A: "L", ArrowRight: "R", d: "R", D: "R", "+": "Z", "=": "Z", "-": "Z", z: "Z", Z: "Z", ArrowUp: "W", w: "W", W: "W", l: "G", L: "G", s: "S", S: "S", i: "I", I: "I", y: "Y", Y: "Y", u: "U", U: "U" }[e.key];
     if (k && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); act(k); }
   });
-  document.getElementById("ver").textContent = VERSION;
   draw();
   setInterval(draw, 30000);   // the header clock
 </script>
