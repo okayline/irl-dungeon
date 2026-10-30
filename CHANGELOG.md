@@ -4,6 +4,8 @@ Times are Hawaii time (HST). Newest first.
 
 ## v0.26 - No Scrollbar - Oct 29 2026, 10:00 PM HST
 - **The screen no longer scrolls inside itself**, so no scrollbar shows beside it. Removed: the screen box's own scrolling (`overflow-x: auto` on `.frame`).
+- The shared footer (from dungeon-items) waits until the page has loaded before it shows, so it no longer appears alone in the middle of the screen first, and its text can be selected. Removed: nothing in this game (the change is in dungeon-items `footer.js`).
+- The comment above the footer in `index.html` shows the footer's current text ("🄯 ~*~88x31~*~ · § ≡ version"). Removed: the old text in that comment ("© ~*~88x31~*~ cLuB, year · ≡ version").
 
 ## v0.25 - No Login Page - Oct 29 2026, 2:32 PM HST
 - **SAVE no longer has save codes, passkeys, logging in or the CARRY list.** They are all in the footer's ≡ window. SAVE keeps your name, your saved cells and (for the admin) test mode. Removed: SAVE CODES, PASSKEYS, LOG IN ON THIS DEVICE, LOG OUT, the CARRY list with its PIN buttons, and "Saved on N devices".
