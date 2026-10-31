@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.27 - Footer Spot - Oct 31 2026, 5:25 AM HST
+- **The footer is drawn into its own spot under the screen and stays hidden until the game has drawn**, so it no longer shows up alone in the middle of the screen. Removed: the footer's old wait-for-page-load.
+- **The ≡ in the footer is only a mark now**; it no longer opens the save codes, passkeys and carry window. The accounts still work behind the scenes. Removed: the popup, so there is no way to open save codes, passkeys or the CARRY list from the game for now.
+
 ## v0.26 - No Scrollbar - Oct 29 2026, 10:00 PM HST
 - **The screen no longer scrolls inside itself**, so no scrollbar shows beside it. Removed: the screen box's own scrolling (`overflow-x: auto` on `.frame`).
 - The shared footer (from dungeon-items) waits until the page has loaded before it shows, so it no longer appears alone in the middle of the screen first, and its text can be selected. Removed: nothing in this game (the change is in dungeon-items `footer.js`).
