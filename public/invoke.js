@@ -1,7 +1,7 @@
 // The INVOKE screen: what you have found. invokeLines() is the text (plain, tested); openInvoke() puts it in a panel
 // over the 3D view. Nothing can be used yet, so it is only a list. A numbered find's #copy links to that copy's page on
 // the shared registry's public ledger (its whole history), the same page 4Dungeon's HISTORY opens with [L]EDGER.
-export const LEDGER_URL = "https://88x31.app/registry";   // the shared registry's public ledger page (88x31.app passes it through)
+export const LEDGER_URL = "https://club.88x31.app/registry";   // the shared registry's public ledger page (club.88x31.app passes it through)
 export const copyUrl = (f) => (f.copy && f.item_id ? `${LEDGER_URL}?item=${f.item_id}&copy=${f.copy}` : null);
 export function invokeLines(finds) {
   if (!finds.length) return ["Nothing yet.", "Press into a wall to search it."];
