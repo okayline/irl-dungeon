@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.28 - Notes Tidy - Oct 31 2026, 1:35 PM HST
+
+- **Behind the scenes only:** nothing in the game changes. The repo's working notes (`CLAUDE.md`) now hold only notes for this game. Removed: the shared working-rules block that was copied into that file.
+
 ## v0.27 - Footer Spot - Oct 31 2026, 5:25 AM HST
 - **The footer is drawn into its own spot under the screen and stays hidden until the game has drawn**, so it no longer shows up alone in the middle of the screen. Removed: the footer's old wait-for-page-load.
 - **The ≡ in the footer is only a mark now**; it no longer opens the save codes, passkeys and carry window. The accounts still work behind the scenes. Removed: the popup, so there is no way to open save codes, passkeys or the CARRY list from the game for now.
