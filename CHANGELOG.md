@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.29 - Tab Icon - Oct 31 2026, 10:45 PM HST
+
+- **A tab icon:** "88 x 31" in gold inside a bold ASCII `+--+` border, on a transparent background, the same style as the other games. Removed: nothing (the page had no icon; browsers showed a blank default).
+
 ## v0.28 - Notes Tidy - Oct 31 2026, 1:35 PM HST
 
 - **Behind the scenes only:** nothing in the game changes. The repo's working notes (`CLAUDE.md`) now hold only notes for this game. Removed: the shared working-rules block that was copied into that file.
