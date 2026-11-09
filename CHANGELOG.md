@@ -2,6 +2,10 @@
 
 Times are Hawaii time (HST). Newest first.
 
+## v0.30 - New Names - Nov 8 2026, 10:02 PM HST
+
+- **Everyone has a new name.** The name words are new lists, the same ones every 88x31 game will use ("Neon Modem", "Sleepy Webring"), and every name changed with them. Wings you signed show your new name. Removed: the old words.
+
 ## v0.29 - Tab Icon - Oct 31 2026, 10:45 PM HST
 
 - **A tab icon:** "88 x 31" in gold inside a bold ASCII `+--+` border, on a transparent background, the same style as the other games. Removed: nothing (the page had no icon; browsers showed a blank default).

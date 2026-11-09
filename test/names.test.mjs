@@ -26,7 +26,7 @@ async function walkFirstWing(api, cell = CELL) {
   for (const room of st.floor.wings[0].rooms) st = await goTo(st, room, api);
   return st;
 }
-const ADJ = ["Quiet", "Amber", "Early"], NOUN = ["Heron", "Lantern", "Sparrow"];
+const ADJ = ["Quiet", "Sleepy", "Misty"], NOUN = ["Modem", "Cursor", "Floppy"];
 
 // ---------- names ----------
 
